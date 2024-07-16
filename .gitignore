@@ -1,0 +1,37 @@
+# git ls-files --others --exclude-from=.git/info/exclude
+# Lines that start with '#' are comments.
+# For a project mostly in C, the following would be a good set of
+# exclude patterns (uncomment them if you want to use them):
+# *.[oa]
+# *~
+
+## /.metadata フォルダーのファイルを除外
+/.metadata/
+## Release フォルダーのファイルを除外
+Release/*
+#!/Release/*.bin
+
+## Debug フォルダーのファイルを除外
+Debug/*
+
+## Exclude フォルダーのファイルを除外
+#Exclude/*
+
+## 除外するファイルの拡張子
+*.zip
+*.bak
+*.map
+*.list
+#*.bin
+*.[do]
+*.mk
+*.su
+*.cyclo
+makefile
+
+## chm ヘルプファイル
+*.chm
+
+## LICENSE.txt
+LICENSE.txt
+STM32H563RG
