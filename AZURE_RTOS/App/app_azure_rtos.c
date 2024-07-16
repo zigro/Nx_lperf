@@ -24,9 +24,24 @@
 /* USER CODE BEGIN Includes */
 #include "main.h"
 /* USER CODE END Includes */
+#include   "tx_api.h"
+#include   "fx_api.h"
+#include   "nx_api.h"
+#include   "nx_web_http_client.h"
+#include   "nx_web_http_server.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+#define HTTP_SERVER_ADDRESS  (ULONG)IP_ADDRESS(172,16,51,80)
+#define HTTP_CLIENT_ADDRESS  (ULONG)IP_ADDRESS(255,255,0,0)
+
+NX_WEB_HTTP_SERVER  my_server;
+NX_PACKET_POOL  server_pool;
+TX_THREAD       server_thread;
+NX_IP           server_ip;
+#define         SERVER_PACKET_SIZE  (NX_WEB_HTTP_SERVER_MIN_PACKET_SIZE * 2)
+
+void            thread_server_entry(ULONG thread_input);
 
 /* USER CODE END PTD */
 
@@ -86,8 +101,149 @@ static TX_BYTE_POOL nx_app_byte_pool;
 VOID tx_application_define(VOID *first_unused_memory)
 {
   /* USER CODE BEGIN  tx_application_define_1*/
+	CHAR    *pointer;
+	UINT    status;
 
+    /* Setup the working pointer. */
+    pointer =  (CHAR *) first_unused_memory;
+
+    /* Create a helper thread for the server. */
+    tx_thread_create(&server_thread, "HTTP Server thread", thread_server_entry, 0,
+                     pointer, DEMO_STACK_SIZE,
+                     1, 1, TX_NO_TIME_SLICE, TX_AUTO_START);
+
+    pointer =  pointer + DEMO_STACK_SIZE;
+
+    /* Initialize the NetX system. */
+    nx_system_initialize();
+
+    /* Create the server packet pool. */
+    status =  nx_packet_pool_create(&server_pool, "HTTP Server Packet Pool",
+		SERVER_PACKET_SIZE, pointer, SERVER_PACKET_SIZE*4);
+
+
+    pointer = pointer + SERVER_PACKET_SIZE * 4;
+
+    /* Check for pool creation error. */
+    if (status)
+    {
+
+        return;
+    }
+
+    /* Create an IP instance. */
+    status = nx_ip_create(&server_ip, "HTTP Server IP", HTTP_SERVER_ADDRESS,
+                          0xFFFFFF00UL, &server_pool, _nx_ram_network_driver,
+                          pointer, 4096, 1);
+
+    pointer =  pointer + 4096;
+
+    /* Check for IP create errors. */
+    if (status)
+    {
+        printf("nx_ip_create failed. Status 0x%x\n", status);
+        return;
+    }
+
+    /* Enable ARP and supply ARP cache memory for the server IP instance. */
+    status = nx_arp_enable(&server_ip, (void *) pointer, 1024);
+
+    /* Check for ARP enable errors. */
+    if (status)
+    {
+        return;
+    }
+
+    pointer = pointer + 1024;
+
+     /* Enable TCP traffic. */
+    status = nx_tcp_enable(&server_ip);
+
+    if (status)
+    {
+        return;
+    }
+
+#if (IP_TYPE==6)
+
+    /* Set up HTTPv6 server, but we have to wait till its address has been
+       validated before we can start the thread_server_entry thread. */
+
+    /* Set up the server's IPv6 address here. */
+    server_ip_address.nxd_ip_address.v6[3] = 0x105;
+    server_ip_address.nxd_ip_address.v6[2] = 0x0;
+    server_ip_address.nxd_ip_address.v6[1] = 0x0000f101;
+    server_ip_address.nxd_ip_address.v6[0] = 0x20010db8;
+    server_ip_address.nxd_ip_version = NX_IP_VERSION_V6;
+
+#endif
+
+    /* Create the NetX HTTP Server. */
+    status = nx_web_http_server_create(&my_server, "My HTTP Server", &server_ip,80,
+			&ram_disk, pointer, 2048, &server_pool, authentication_check,
+			NX_NULL);
+
+    if (status)
+    {
+        return;
+    }
+
+    pointer =  pointer + 2048;
+
+    /* Save the memory pointer for the RAM disk. */
+    ram_disk_memory =  pointer;
+
+    /* Create the HTTP client thread. */
+    status = tx_thread_create(&client_thread, "HTTP Client", thread_client_entry, 0,
+                     pointer, DEMO_STACK_SIZE,
+                     2, 2, TX_NO_TIME_SLICE, TX_AUTO_START);
+
+    pointer =  pointer + DEMO_STACK_SIZE;
+
+    /* Check for thread create error. */
+    if (status)
+    {
+
+        return;
+    }
+
+    /* Create the Client packet pool. */
+    status =  nx_packet_pool_create(&client_pool, "HTTP Client Packet Pool",SERVER_PACKET_SIZE, pointer, SERVER_PACKET_SIZE*4);
+
+
+
+    pointer = pointer + SERVER_PACKET_SIZE * 4;
+
+    /* Check for pool creation error. */
+    if (status)
+    {
+
+        return;
+    }
+
+
+    /* Create an IP instance. */
+    status = nx_ip_create(&client_ip, "HTTP Client IP", HTTP_CLIENT_ADDRESS,
+                          0xFFFFFF00UL, &client_pool, _nx_ram_network_driver,
+                          pointer, 2048, 1);
+
+    pointer =  pointer + 2048;
+
+    /* Check for IP create errors. */
+    if (status)
+    {
+        return;
+    }
+
+    nx_arp_enable(&client_ip, (void *) pointer, 1024);
+
+    pointer =  pointer + 2048;
+
+     /* Enable TCP traffic. */
+    nx_tcp_enable(&client_ip);
   /* USER CODE END  tx_application_define_1 */
+
+
 #if (USE_STATIC_ALLOCATION == 1)
   UINT status = TX_SUCCESS;
   VOID *memory_ptr;
