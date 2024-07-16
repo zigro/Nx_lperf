@@ -22,7 +22,6 @@
 #include "app_netxduo.h"
 
 /* Private includes ----------------------------------------------------------*/
-#include "nxd_dhcp_client.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
@@ -60,15 +59,12 @@ static uint8_t nx_server_pool[SERVER_POOL_SIZE];
 TX_THREAD      NxAppThread;
 NX_PACKET_POOL NxAppPool;
 NX_IP          NetXDuoEthIpInstance;
-TX_SEMAPHORE   DHCPSemaphore;
-NX_DHCP        DHCPClient;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 static VOID nx_app_thread_entry (ULONG thread_input);
-static VOID ip_address_change_notify_callback(NX_IP *ip_instance, VOID *ptr);
 /* USER CODE BEGIN PFP */
 /* Define thread prototypes.  */
 extern VOID nx_iperf_entry(NX_PACKET_POOL *pool_ptr, NX_IP *ip_ptr, UCHAR* http_stack, ULONG http_stack_size, UCHAR *iperf_stack, ULONG iperf_stack_size);
@@ -201,24 +197,6 @@ UINT MX_NetXDuo_Init(VOID *memory_ptr)
     return TX_THREAD_ERROR;
   }
 
-//#ifdef DHCP_ENABLED
-  /* Create the DHCP client */
-
-  /* USER CODE BEGIN DHCP_Protocol_Initialization */
-
-  /* USER CODE END DHCP_Protocol_Initialization */
-
-  ret = nx_dhcp_create(&DHCPClient, &NetXDuoEthIpInstance, "DHCP Client");
-
-  if (ret != NX_SUCCESS)
-  {
-    return NX_DHCP_ERROR;
-  }
-//#endif
-
-  /* set DHCP notification callback  */
-  tx_semaphore_create(&DHCPSemaphore, "DHCP Semaphore", 0);
-
   /* USER CODE BEGIN MX_NetXDuo_Init */
 
   /* Allocate the server packet pool. */
@@ -303,26 +281,9 @@ UINT MX_NetXDuo_Init(VOID *memory_ptr)
     Error_Handler();
   }
   PRINT_IP_ADDRESS(IpAddress);
- /* USER CODE END MX_NetXDuo_Init */
-  tx_semaphore_put(&DHCPSemaphore);
+  /* USER CODE END MX_NetXDuo_Init */
 #endif
   return ret;
-}
-
-/**
-* @brief  ip address change callback.
-* @param ip_instance: NX_IP instance
-* @param ptr: user data
-* @retval none
-*/
-static VOID ip_address_change_notify_callback(NX_IP *ip_instance, VOID *ptr)
-{
-  /* USER CODE BEGIN ip_address_change_notify_callback */
-
-  /* USER CODE END ip_address_change_notify_callback */
-
-  /* release the semaphore as soon as an IP address is available */
-  tx_semaphore_put(&DHCPSemaphore);
 }
 
 /**
@@ -335,61 +296,6 @@ static VOID nx_app_thread_entry (ULONG thread_input)
   /* USER CODE BEGIN Nx_App_Thread_Entry 0 */
 
   /* USER CODE END Nx_App_Thread_Entry 0 */
-
-  UINT ret = NX_SUCCESS;
-
-  /* USER CODE BEGIN Nx_App_Thread_Entry 1 */
-
-  /* USER CODE END Nx_App_Thread_Entry 1 */
-
-  /* register the IP address change callback */
-  ret = nx_ip_address_change_notify(&NetXDuoEthIpInstance, ip_address_change_notify_callback, NULL);
-  if (ret != NX_SUCCESS)
-  {
-    /* USER CODE BEGIN IP address change callback error */
-
-    /* Error, call error handler.*/
-    Error_Handler();
-
-    /* USER CODE END IP address change callback error */
-  }
-
-  /* start the DHCP client */
-  ret = nx_dhcp_start(&DHCPClient);
-  if (ret != NX_SUCCESS)
-  {
-    /* USER CODE BEGIN DHCP client start error */
-
-    /* Error, call error handler.*/
-    Error_Handler();
-
-    /* USER CODE END DHCP client start error */
-  }
-
-  /* wait until an IP address is ready */
-  if(tx_semaphore_get(&DHCPSemaphore, NX_APP_DEFAULT_TIMEOUT) != TX_SUCCESS)
-  {
-    /* USER CODE BEGIN DHCPSemaphore get error */
-
-    /* Error, call error handler.*/
-    Error_Handler();
-
-    /* USER CODE END DHCPSemaphore get error */
-  }
-
-  /* USER CODE BEGIN Nx_App_Thread_Entry 2 */
-  ret = nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask);
-
-  if (ret != TX_SUCCESS)
-  {
-    Error_Handler();
-  }
-
-  PRINT_IP_ADDRESS(IpAddress);
-
-  /* Call entry function to start iperf test.  */
-  nx_iperf_entry(&WebServerPool, &NetXDuoEthIpInstance, http_stack, HTTP_STACK_SIZE, iperf_stack, IPERF_STACK_SIZE);
-  /* USER CODE END Nx_App_Thread_Entry 2 */
 
 }
 /* USER CODE BEGIN 1 */
@@ -431,8 +337,8 @@ static VOID App_Link_Thread_Entry(ULONG thread_input)
           nx_ip_driver_direct_command(&NetXDuoEthIpInstance, NX_LINK_ENABLE,
                                       &actual_status);
           /* Restart DHCP Client. */
-          nx_dhcp_stop(&DHCPClient);
-          nx_dhcp_start(&DHCPClient);
+//          nx_dhcp_stop(&DHCPClient);
+//          nx_dhcp_start(&DHCPClient);
         }
       }
     }

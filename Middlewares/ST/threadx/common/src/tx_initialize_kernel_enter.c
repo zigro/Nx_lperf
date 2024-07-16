@@ -56,12 +56,13 @@ TX_SAFETY_CRITICAL_EXCEPTION_HANDLER
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */
-/*    この関数は、初期化中に呼び出される最初の ThreadX 関数です。         */
-/*    アプリケーションの "main() "関数から呼び出される。                  */
-/*    このルーチンは決して戻らないことに注意することが重要です。          */
-/*    この関数の処理は比較的単純で、いくつかの ThreadX 初期化関数を       */
-/*    呼び出し（必要な場合）、 アプリケーション定義関数を呼び出し、       */
-/*    そしてスケジューラを呼び出します。                                  */
+/*    This function is the first ThreadX function called during           */
+/*    initialization.  It is called from the application's "main()"       */
+/*    function.  It is important to note that this routine never          */
+/*    returns.  The processing of this function is relatively simple:     */
+/*    it calls several ThreadX initialization functions (if needed),      */
+/*    calls the application define function, and then invokes the         */
+/*    scheduler.                                                          */
 /*                                                                        */
 /*  INPUT                                                                 */
 /*                                                                        */
@@ -97,37 +98,43 @@ TX_SAFETY_CRITICAL_EXCEPTION_HANDLER
 VOID  _tx_initialize_kernel_enter(VOID)
 {
 
-    /* コンパイラが ThreadX を事前に初期化しているかどうかを判断する。 */
+    /* Determine if the compiler has pre-initialized ThreadX.  */
     if (_tx_thread_system_state != TX_INITIALIZE_ALMOST_DONE)
     {
-        /* No、初期化が必要 */
 
-        /* 初期化が進行中であることを示すシステム状態変数を設定する
-         * この変数は、後で割り込みのネストを表すために使用される  */
+        /* No, the initialization still needs to take place.  */
+
+        /* Ensure that the system state variable is set to indicate
+           initialization is in progress.  Note that this variable is
+           later used to represent interrupt nesting.  */
         _tx_thread_system_state =  TX_INITIALIZE_IN_PROGRESS;
 
-        /* ポート固有の前処理を呼び出す  */
+        /* Call any port specific preprocessing.  */
         TX_PORT_SPECIFIC_PRE_INITIALIZATION
 
-        /* 低レベル初期化関数を呼び出して、プロセッサ固有の初期化をすべて処理する  */
+        /* Invoke the low-level initialization to handle all processor specific
+           initialization issues.  */
         _tx_initialize_low_level();
 
-        /* 高レベルの初期化関数を呼び出して、すべての ThreadX コンポーネントと
-         * アプリケーションの初期化関数を実行する  */
+        /* Invoke the high-level initialization to exercise all of the
+           ThreadX components and the application's initialization
+           function.  */
         _tx_initialize_high_level();
 
-        /* ポート固有の後処理を呼び出す  */
+        /* Call any port specific post-processing.  */
         TX_PORT_SPECIFIC_POST_INITIALIZATION
     }
 
     /* Optional processing extension.  */
     TX_INITIALIZE_KERNEL_ENTER_EXTENSION
 
-    /* 初期化が進行中であることを示すシステム状態変数を設定する
-     * この変数は、後で割り込みのネストを表すために使用される  */
+    /* Ensure that the system state variable is set to indicate
+       initialization is in progress.  Note that this variable is
+       later used to represent interrupt nesting.  */
     _tx_thread_system_state =  TX_INITIALIZE_IN_PROGRESS;
 
-    /* アプリケーション初期化関数を呼び出し、利用可能な最初のメモリアドレスを渡す  */
+    /* Call the application provided initialization function.  Pass the
+       first available memory address to it.  */
     tx_application_define(_tx_initialize_unused_memory);
 
     /* Set the system state in preparation for entering the thread
@@ -142,7 +149,7 @@ VOID  _tx_initialize_kernel_enter(VOID)
     _tx_execution_initialize();
 #endif
 
-    /* スレッドの実行を開始するスケジューリング・ループに入る！ */
+    /* Enter the scheduling loop to start executing threads!  */
     _tx_thread_schedule();
 
 #ifdef TX_SAFETY_CRITICAL
