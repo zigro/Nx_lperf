@@ -20,6 +20,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "app_netxduo.h"
+#include "logmsg.h"
 
 /* Private includes ----------------------------------------------------------*/
 #include "nxd_dhcp_client.h"
@@ -34,6 +35,9 @@ TX_THREAD AppLinkThread;
 TX_SEMAPHORE Semaphore;
 
 NX_PACKET_POOL WebServerPool;
+
+ULONG DefaultIpAddress =	IP_ADDRESS(172,  16,  51,  81);
+ULONG DefaultSubNetMask =	IP_ADDRESS(255, 255,   0,   0);
 
 ULONG IpAddress;
 ULONG NetMask;
@@ -83,7 +87,6 @@ static VOID App_Link_Thread_Entry(ULONG thread_input);
  */
 UINT MX_NetXDuo_Init(VOID *memory_ptr)
 {
-	UINT ret = NX_SUCCESS;
 	TX_BYTE_POOL *byte_pool = (TX_BYTE_POOL*)memory_ptr;
 
 	/* USER CODE BEGIN App_NetXDuo_MEM_POOL */
@@ -99,66 +102,80 @@ UINT MX_NetXDuo_Init(VOID *memory_ptr)
 	nx_system_initialize();
 
 	/* packet_pool用メモリ確保 */
-	if (TX_SUCCESS != tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_PACKET_POOL_SIZE, TX_NO_WAIT)){
+	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_PACKET_POOL_SIZE, TX_NO_WAIT))){
 		return TX_POOL_ERROR;
 	}
 	/* パケット割り当てに使用するパケットプールを作成します。
 	 * 余分な NX_PACKET を使用する場合は、NX_APP_PACKET_POOL_SIZE を大きくする必要があります。
 	 */
-	if (NX_SUCCESS != nx_packet_pool_create(&NxAppPool, "NetXDuo App Pool", DEFAULT_PAYLOAD_SIZE, pointer, NX_APP_PACKET_POOL_SIZE)){
-		return NX_POOL_ERROR;
+	if (NX_SUCCESS != ASSERT_ERROR("nx_packet_pool_create",
+			nx_packet_pool_create(&NxAppPool, "NetXDuo App Pool", DEFAULT_PAYLOAD_SIZE, pointer, NX_APP_PACKET_POOL_SIZE))){
+		return NX_NOT_SUCCESSFUL;
 	}
 
 	/* Ip_Instance用メモリ確保 */
-	if (TX_SUCCESS != tx_byte_allocate(byte_pool, (VOID **) &pointer, Nx_IP_INSTANCE_THREAD_SIZE, TX_NO_WAIT)){
+	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer, Nx_IP_INSTANCE_THREAD_SIZE, TX_NO_WAIT))){
 		return TX_POOL_ERROR;
 	}
+
 	/* Create the main NX_IP instance */
-	if (NX_SUCCESS != nx_ip_create(&NetXDuoEthIpInstance, "NetX Ip instance", NX_APP_DEFAULT_IP_ADDRESS, NX_APP_DEFAULT_NET_MASK,
-			&NxAppPool, nx_stm32_eth_driver,	pointer, Nx_IP_INSTANCE_THREAD_SIZE, NX_APP_INSTANCE_PRIORITY)){
+	if (NX_SUCCESS != ASSERT_ERROR("nx_ip_create",
+			nx_ip_create(&NetXDuoEthIpInstance, "NetX Ip instance", DefaultIpAddress, DefaultSubNetMask,
+					&NxAppPool, nx_stm32_eth_driver,	pointer, Nx_IP_INSTANCE_THREAD_SIZE, NX_APP_INSTANCE_PRIORITY))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
 	/* Allocate the memory for ARP */
-	if (TX_SUCCESS != tx_byte_allocate(byte_pool, (VOID **) &pointer, DEFAULT_ARP_CACHE_SIZE, TX_NO_WAIT)){
+	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer, DEFAULT_ARP_CACHE_SIZE, TX_NO_WAIT))){
 		return TX_POOL_ERROR;
 	}
 	/* Enable the ARP protocol and provide the ARP cache size for the IP instance */
-	if (NX_SUCCESS != nx_arp_enable(&NetXDuoEthIpInstance, (VOID *)pointer, DEFAULT_ARP_CACHE_SIZE)){
+	if (NX_SUCCESS != ASSERT_ERROR("nx_arp_enable",
+			nx_arp_enable(&NetXDuoEthIpInstance, (VOID *)pointer, DEFAULT_ARP_CACHE_SIZE))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
 	/* Enable the ICMP */
-	if (NX_SUCCESS != nx_icmp_enable(&NetXDuoEthIpInstance)){
+	if (NX_SUCCESS != ASSERT_ERROR("nx_icmp_enable",
+			nx_icmp_enable(&NetXDuoEthIpInstance))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
 	/* Enable TCP Protocol */
-	if (NX_SUCCESS != nx_tcp_enable(&NetXDuoEthIpInstance)){
+	if (NX_SUCCESS != ASSERT_ERROR("nx_tcp_enable",
+			nx_tcp_enable(&NetXDuoEthIpInstance))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
 	/* Enable the UDP protocol required for  DHCP communication */
-	if (NX_SUCCESS != nx_udp_enable(&NetXDuoEthIpInstance)){
+	if (NX_SUCCESS != ASSERT_ERROR("nx_udp_enable",
+			nx_udp_enable(&NetXDuoEthIpInstance))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
 	/* Allocate the memory for main thread   */
-	if (TX_SUCCESS != tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_THREAD_STACK_SIZE, TX_NO_WAIT)){
+	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_THREAD_STACK_SIZE, TX_NO_WAIT))){
 		return TX_POOL_ERROR;
 	}
 	/* Create the main thread */
-	if (TX_SUCCESS != tx_thread_create(&NxAppThread, "NetXDuo App thread", nx_app_thread_entry , 0, pointer, NX_APP_THREAD_STACK_SIZE,
-			NX_APP_THREAD_PRIORITY, NX_APP_THREAD_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START)){
+	if (TX_SUCCESS != ASSERT_ERROR("tx_thread_create",
+			tx_thread_create(&NxAppThread, "NetXDuo App thread", nx_app_thread_entry , 0, pointer, NX_APP_THREAD_STACK_SIZE,
+					NX_APP_THREAD_PRIORITY, NX_APP_THREAD_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
 		return TX_THREAD_ERROR;
 	}
 
-#ifdef DHCP_ENABLED
-	/* Create the DHCP client */
-	if (NX_SUCCESS != nx_dhcp_create(&DHCPClient, &NetXDuoEthIpInstance, "DHCP Client")){
-		return NX_DHCP_ERROR;
+	if (DefaultIpAddress == 0){
+		// DefaultIpAddress == 0 ならばDHCPでの接続を行う
+		/* Create the DHCP client */
+		if (NX_SUCCESS != ASSERT_ERROR("nx_dhcp_create",
+				nx_dhcp_create(&DHCPClient, &NetXDuoEthIpInstance, "DHCP Client"))){
+			return NX_DHCP_ERROR;
+		}
 	}
-#endif
 
 	/* set DHCP notification callback  */
 	tx_semaphore_create(&DHCPSemaphore, "DHCP Semaphore", 0);
@@ -166,76 +183,48 @@ UINT MX_NetXDuo_Init(VOID *memory_ptr)
 	/* USER CODE BEGIN MX_NetXDuo_Init */
 
 	/* Allocate the server packet pool. */
-	if (TX_SUCCESS != (ret = tx_byte_allocate(byte_pool, (VOID **) &pointer, SERVER_POOL_SIZE, TX_NO_WAIT))){
-		/* Check server packet pool memory allocation. */
-		printf("Packed pool memory allocation failed : 0x%02x\n", ret);
-		Error_Handler();
-	}
+	ASSERT_FATALERROR("Packed pool memory allocation",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer, SERVER_POOL_SIZE, TX_NO_WAIT));
 	/* Create the server packet pool. */
-	if (NX_SUCCESS != (ret = nx_packet_pool_create(&WebServerPool, "HTTP Server Packet Pool", SERVER_PACKET_SIZE, nx_server_pool, SERVER_POOL_SIZE))){
-		/* Check for server pool creation status. */
-		printf("Server pool creation failed : 0x%02x\n", ret);
-		Error_Handler();
-	}
+	ASSERT_FATALERROR("Server pool creation",
+			nx_packet_pool_create(&WebServerPool, "HTTP Server Packet Pool", SERVER_PACKET_SIZE, nx_server_pool, SERVER_POOL_SIZE));
 
 	/* Set the server stack and IPerf stack.  */
 	/* Allocate the server stack. */
-	if (TX_SUCCESS != (ret = tx_byte_allocate(byte_pool, (VOID **) &pointer, HTTP_STACK_SIZE, TX_NO_WAIT))){
-		/* Check server stack memory allocation. */
-		printf("Server stack memory allocation failed : 0x%02x\n", ret);
-		Error_Handler();
-	}
+	ASSERT_FATALERROR("Server stack memory allocation",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer, HTTP_STACK_SIZE, TX_NO_WAIT));
 	http_stack = (UCHAR *)pointer;
 
 	/* Allocate the IPERF stack. */
-	if (TX_SUCCESS != (ret = tx_byte_allocate(byte_pool, (VOID **) &pointer, IPERF_STACK_SIZE, TX_NO_WAIT))){
-		/* Check IPERF stack memory allocation. */
-		printf("IPERF stack memory allocation failed : 0x%02x\n", ret);
-		Error_Handler();
-	}
+	ASSERT_FATALERROR("IPERF stack memory allocation",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer, IPERF_STACK_SIZE, TX_NO_WAIT));
 	iperf_stack = (UCHAR *)pointer;
 
 	/* Allocate the memory for Link thread   */
-	if (TX_SUCCESS != tx_byte_allocate(byte_pool, (VOID **) &pointer,2 *  DEFAULT_MEMORY_SIZE, TX_NO_WAIT)){
+	if (TX_SUCCESS != ASSERT_ERROR("Allocate the memory for App Link thread",
+			tx_byte_allocate(byte_pool, (VOID **) &pointer,2 *  DEFAULT_MEMORY_SIZE, TX_NO_WAIT))){
 		return TX_POOL_ERROR;
 	}
 
 	/* create the Link thread */
-	if (TX_SUCCESS != tx_thread_create(&AppLinkThread, "App Link Thread", App_Link_Thread_Entry, 0, pointer, 2 * DEFAULT_MEMORY_SIZE,
-			LINK_PRIORITY, LINK_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START)){
+	if (TX_SUCCESS != ASSERT_ERROR("Create the App Link thread",
+			tx_thread_create(&AppLinkThread, "App Link Thread", App_Link_Thread_Entry, 0, pointer, 2 * DEFAULT_MEMORY_SIZE,
+					LINK_PRIORITY, LINK_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
 		return NX_NOT_ENABLED;
 	}
 
 	// IPAddressを表示
-	if (NX_SUCCESS != nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask)){
-		Error_Handler();
-	}
+	ASSERT_FATALERROR("nx_ip_address_get",
+			nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask));
 	PRINT_IP_ADDRESS(IpAddress);
 
-#if 0
-	// 固定IPAddressを設定
-	ret = nx_ip_address_set(&NetXDuoEthIpInstance, IP_ADDRESS(172, 16, 51, 81), IP_ADDRESS(255, 255, 0, 0));
-	if (ret != NX_SUCCESS)
-	{
-		Error_Handler();
+	if (IpAddress != 0){
+		tx_semaphore_put(&DHCPSemaphore);
 	}
 
-	// IPAddressを表示
-	ret = nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask);
-	if (ret != TX_SUCCESS)
-	{
-		Error_Handler();
-	}
-	PRINT_IP_ADDRESS(IpAddress);
-	/* USER CODE END MX_NetXDuo_Init */
-#endif
-#if 1 //#ifdef DHCP_ENABLED
-	tx_semaphore_put(&DHCPSemaphore);
-#endif
-	return ret;
+	return NX_SUCCESS;
 }
 
-#if 1 //#ifdef DHCP_ENABLED
 /**
  * @brief  ip address change callback.
  * @param ip_instance: NX_IP instance
@@ -244,84 +233,47 @@ UINT MX_NetXDuo_Init(VOID *memory_ptr)
  */
 static VOID ip_address_change_notify_callback(NX_IP *ip_instance, VOID *ptr)
 {
-	/* USER CODE BEGIN ip_address_change_notify_callback */
-
-	/* USER CODE END ip_address_change_notify_callback */
-
 	/* release the semaphore as soon as an IP address is available */
 	tx_semaphore_put(&DHCPSemaphore);
 }
-#endif
 
-/**
+/**------------------------------------------------------------------------------------------------
  * @brief  Main thread entry.
  * @param thread_input: ULONG user argument used by the thread entry
  * @retval none
  */
 static VOID nx_app_thread_entry (ULONG thread_input)
 {
-	/* USER CODE BEGIN Nx_App_Thread_Entry 0 */
+	// IP address change callbackを設定する
+	ASSERT_FATALERROR("nx_ip_address_change_notify",
+		nx_ip_address_change_notify(&NetXDuoEthIpInstance, ip_address_change_notify_callback, NULL));
 
-	/* USER CODE END Nx_App_Thread_Entry 0 */
-	UINT ret = NX_SUCCESS;
+	// DHCPサーバーからのIP ADDRESS取得を開始
+	ASSERT_FATALERROR("nx_dhcp_start",
+		nx_dhcp_start(&DHCPClient));
 
-	/* USER CODE BEGIN Nx_App_Thread_Entry 1 */
-
-	/* USER CODE END Nx_App_Thread_Entry 1 */
-
-	/* register the IP address change callback */
-	ret = nx_ip_address_change_notify(&NetXDuoEthIpInstance, ip_address_change_notify_callback, NULL);
-	if (ret != NX_SUCCESS)
-	{
-		/* USER CODE BEGIN IP address change callback error */
-
-		/* Error, call error handler.*/
-		Error_Handler();
-
-		/* USER CODE END IP address change callback error */
-	}
-
-#ifdef DHCP_ENABLED
-	/* start the DHCP client */
-	ret = nx_dhcp_start(&DHCPClient);
-	if (ret != NX_SUCCESS)
-	{
-		/* USER CODE BEGIN DHCP client start error */
-
-		/* Error, call error handler.*/
-		Error_Handler();
-
-		/* USER CODE END DHCP client start error */
-	}
-#endif
-
-	/* wait until an IP address is ready */
+	// DHCPサーバーからのIP ADDRESS取得を待機
 	if(tx_semaphore_get(&DHCPSemaphore, NX_APP_DEFAULT_TIMEOUT) != TX_SUCCESS)
-	{
-		/* USER CODE BEGIN DHCPSemaphore get error */
-
-		/* Error, call error handler.*/
-		Error_Handler();
-
-		/* USER CODE END DHCPSemaphore get error */
+	{	// DHCPサーバーからのIP ADDRESS取得に失敗した
+		if (NX_APP_DEFAULT_IP_ADDRESS == 0 || NX_APP_DEFAULT_NET_MASK == 0)
+			ERROR_HANDLER();
+		// NX_APP_DEFAULT_IP_ADDRESS が定義されていれば固定IPAddressとして設定
+		ASSERT_FATALERROR("nx_ip_address_set",
+			nx_ip_address_set(&NetXDuoEthIpInstance, NX_APP_DEFAULT_IP_ADDRESS, NX_APP_DEFAULT_NET_MASK));
 	}
 
 	/* USER CODE BEGIN Nx_App_Thread_Entry 2 */
-	ret = nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask);
-
-	if (ret != TX_SUCCESS)
-	{
-		Error_Handler();
-	}
-
+	ASSERT_FATALERROR("nx_ip_address_get",
+		nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask));
 	PRINT_IP_ADDRESS(IpAddress);
 
 	/* Call entry function to start iperf test.  */
 	nx_iperf_entry(&WebServerPool, &NetXDuoEthIpInstance, http_stack, HTTP_STACK_SIZE, iperf_stack, IPERF_STACK_SIZE);
-	/* USER CODE END Nx_App_Thread_Entry 2 */
 }
-/* USER CODE BEGIN 1 */
-/**
+
+
+
+/**------------------------------------------------------------------------------------------------
  * @brief  Link thread entry
  * @param thread_input: ULONG thread parameter
  * @retval none
