@@ -4624,10 +4624,5 @@
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/NetXDuo/App/app_netxduo.c</locationURI>
 		</link>
-		<link>
-			<name>Application/User/NetXDuo/App/nx_iperf.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/netxduo/utility/iperf/nx_iperf.c</locationURI>
-		</link>
 	</linkedResources>
 </projectDescription>

@@ -9,6 +9,8 @@
 #ifndef __LOGMSG_H
 #define __LOGMSG_H
 
+#include <stdio.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,53 +34,55 @@ extern "C" {
 #if LOGMSG_LEVEL > MSG_LEVEL_DEBUG
 	#define LOGMSG_DEBUG(fmt,...)
 #else
-	#define LOGMSG_DEBUG(fmt,...)			LOGMSG(MSG_LEVEL_DEBUG,fmt,__VA_ARGS__)
+	#define LOGMSG_DEBUG(fmt,...)			LogMsg(MSG_LEVEL_DEBUG,fmt, ##__VA_ARGS__)
 #endif
 
 #if LOGMSG_LEVEL > MSG_LEVEL_INFOMATION
 	#define LOGMSG_INFOMATION(fmt,...)
 #else
-	#define LOGMSG_INFOMATION(fmt,...)		LOGMSG(MSG_LEVEL_INFOMATION,fmt,__VA_ARGS__)
+	#define LOGMSG_INFOMATION(fmt,...)		LogMsg(MSG_LEVEL_INFOMATION,fmt, ##__VA_ARGS__)
 #endif
 
 #if LOGMSG_LEVEL > MSG_LEVEL_MESSAGE
 	#define LOGMSG_MESSAGE(fmt,...)
 #else
-	#define LOGMSG_MESSAGE(fmt,...)			LOGMSG(MSG_LEVEL_MESSAGE,fmt,__VA_ARGS__)
+	#define LOGMSG_MESSAGE(fmt,...)			LogMsg(MSG_LEVEL_MESSAGE,fmt, ##__VA_ARGS__)
 #endif
 
 #if LOGMSG_LEVEL > MSG_LEVEL_RESERVED
 	#define LOGMSG_RESERVED(fmt,...)
 #else
-	#define LOGMSG_RESERVED(fmt,...)		LOGMSG(MSG_LEVEL_RESERVED,fmt,__VA_ARGS__)
+	#define LOGMSG_RESERVED(fmt,...)		LogMsg(MSG_LEVEL_RESERVED,fmt, ##__VA_ARGS__)
 #endif
 
 #if LOGMSG_LEVEL > MSG_LEVEL_NOERROR
 	#define LOGMSG_NOERROR(fmt,...)
 #else
-	#define LOGMSG_NOERROR(fmt,...)			LOGMSG(MSG_LEVEL_NOERROR,fmt,__VA_ARGS__)
+	#define LOGMSG_NOERROR(fmt,...)			LogMsg(MSG_LEVEL_NOERROR,fmt, ##__VA_ARGS__)
 #endif
 
 #if LOGMSG_LEVEL > MSG_LEVEL_WARNING
 	#define LOGMSG_WARNING(fmt,...)
 #else
-	#define LOGMSG_WARNING(fmt,...)			LOGMSG(MSG_LEVEL_WARNING,fmt,__VA_ARGS__)
+	#define LOGMSG_WARNING(fmt,...)			LogMsg(MSG_LEVEL_WARNING,fmt, ##__VA_ARGS__)
 #endif
 
 #if LOGMSG_LEVEL > MSG_LEVEL_ERROR
 	#define LOGMSG_ERROR(fmt,...)
 #else
-	#define LOGMSG_ERROR(fmt,...)			LOGMSG(MSG_LEVEL_ERROR,fmt,__VA_ARGS__)
+	#define LOGMSG_ERROR(fmt,...)			LogMsg(MSG_LEVEL_ERROR,fmt, ##__VA_ARGS__)
+
 #endif
 
 #if LOGMSG_LEVEL > MSG_LEVEL_FATALERROR
 	#define LOGMSG_FATALERROR(fmt,...)
 #else
-	#define LOGMSG_FATALERROR(fmt,...)		LOGMSG(MSG_LEVEL_FATALERROR,fmt,__VA_ARGS__)
+	#define LOGMSG_FATALERROR(fmt,...)		LogMsg(MSG_LEVEL_FATALERROR,fmt, ##__VA_ARGS__)
 #endif
 
+//void LogMsg(int level, const char* fmt);
 void LogMsg(int level, const char* fmt, ...);
-#define LOGMSG(lv,msg,...) 					LogMsg(lv, msg, __VA_ARGS__)
+//#define LOGMSG(lv,msg,...) 					LogMsg(lv, msg, ##__VA_ARGS__)
 
 
 
@@ -86,38 +90,38 @@ void LogMsg(int level, const char* fmt, ...);
 #if DBGMSG_LEVEL > MSG_LEVEL_DEBUG
 	#define DBGMSG_DEBUG(...)
 #else
-	#define DBGMSG_DEBUG(...)			DBGMSG(MSG_LEVEL_DEBUG,__VA_ARGS__)
+	#define DBGMSG_DEBUG(...)			DBGMSG(MSG_LEVEL_DEBUG, ##__VA_ARGS__)
 #endif
 
 #if DBGMSG_LEVEL > MSG_LEVEL_INFOMATION
 	#define DBGMSG_INFOMATION(...)
 #else
-	#define DBGMSG_INFOMATION(...)		DBGMSG(MSG_LEVEL_INFOMATION,__VA_ARGS__)
+	#define DBGMSG_INFOMATION(...)		DBGMSG(MSG_LEVEL_INFOMATION, ##__VA_ARGS__)
 #endif
 
 #if DBGMSG_LEVEL > MSG_LEVEL_MESSAGE
 	#define DBGMSG_MESSAGE(...)
 #else
-	#define DBGMSG_MESSAGE(...)			DBGMSG(MSG_LEVEL_MESSAGE,__VA_ARGS__)
+	#define DBGMSG_MESSAGE(...)			DBGMSG(MSG_LEVEL_MESSAGE, ##__VA_ARGS__)
 #endif
 
 #if DBGMSG_LEVEL > MSG_LEVEL_RESERVED
 	#define DBGMSG_RESERVED(...)
 #else
-	#define DBGMSG_RESERVED(...)		DBGMSG(MSG_LEVEL_RESERVED,__VA_ARGS__)
+	#define DBGMSG_RESERVED(...)		DBGMSG(MSG_LEVEL_RESERVED, ##__VA_ARGS__)
 #endif
 
 #if DBGMSG_LEVEL > MSG_LEVEL_NOERROR
 	#define DBGMSG_NOERROR(...)
 #else
-	#define DBGMSG_NOERROR(...)			DBGMSG(MSG_LEVEL_NOERROR,__VA_ARGS__)
+	#define DBGMSG_NOERROR(...)			DBGMSG(MSG_LEVEL_NOERROR, ##__VA_ARGS__)
 #endif
 
 #if DBGMSG_LEVEL > MSG_LEVEL_WARNING
 	#define DBGMSG_WARNING(...)
 	#define ASSERT_WARNING(...)
 #else
-	#define DBGMSG_WARNING(...)			DBGMSG(MSG_LEVEL_WARNING,__VA_ARGS__)
+	#define DBGMSG_WARNING(...)			DBGMSG(MSG_LEVEL_WARNING, ##__VA_ARGS__)
 //	#define ASSERT_WARNING(status,...)	ASSERT(status, MSG_LEVEL_WARNING, __VA_ARGS__)
 	#define ASSERT_WARNING(msg,status)	ASSERT(status, MSG_LEVEL_WARNING, msg)
 #endif
@@ -125,7 +129,7 @@ void LogMsg(int level, const char* fmt, ...);
 #if DBGMSG_LEVEL > MSG_LEVEL_ERROR
 	#define DBGMSG_ERROR(...)
 #else
-	#define DBGMSG_ERROR(...)			DBGMSG(MSG_LEVEL_ERROR,__VA_ARGS__)
+	#define DBGMSG_ERROR(...)			DBGMSG(MSG_LEVEL_ERROR, ##__VA_ARGS__)
 //	#define ASSERT_ERROR(status,...)	ASSERT(status, MSG_LEVEL_WARNING, __VA_ARGS__)
 	#define ASSERT_ERROR(msg,status)	ASSERT(status, MSG_LEVEL_WARNING, msg)
 #endif
@@ -135,7 +139,7 @@ void LogMsg(int level, const char* fmt, ...);
 	#define ASSERT_FATALERROR(msg,status)		{ if(status!=0) ERROR_HANDLER(); }
 	#define ASSERT_FATALERROR(msg,status,...)	{ if(status!=0) ERROR_HANDLER(); }
 #else
-	#define DBGMSG_FATALERROR(...)			DBGMSG(MSG_LEVEL_FATALERROR,__VA_ARGS__)
+	#define DBGMSG_FATALERROR(...)			DBGMSG(MSG_LEVEL_FATALERROR, ##__VA_ARGS__)
 //	#define ASSERT_FATALERROR(status,...)	ASSERT(status, MSG_LEVEL_WARNING, __VA_ARGS__)
 	#define ASSERT_FATALERROR(msg,status)	ASSERT(status, MSG_LEVEL_WARNING, msg)
 #endif

@@ -1542,6 +1542,10 @@ CHAR      *ip_addr_string;
     nx_iperf_udp_tx_cleanup();
 }
 
+/*---------------------------------------------------------------------------------------------------------------------
+ * 	TCP受信スレッド
+ * 	TCPサーバーソケットを作成しリッスン要求を待機
+ */
 void    nx_iperf_thread_tcp_rx_entry(ULONG thread_input)
 {
 UINT        status;
@@ -1570,34 +1574,30 @@ ULONG       port;
     ctrlInfo_ptr -> RunTime = 0;
     ctrlInfo_ptr -> ErrorCode = 0;
 
-    /* Ensure the IP instance has been initialized.  */
+    // IPインスタンスが初期化されていることを確認します。
+    // この機能は、必要な条件を満たすスレッドスリープを使用して、指定されたインターフェースのリンク状態をポーリングします。
+    // 要求されたステータスがIPインスタンスにのみ存在する場合、例えばNX_IP_INITIALIZE_DONEの場合、このサービスは、そのステータスに対するIP設定を提供します。
     status =  nx_ip_status_check(nx_iperf_test_ip, NX_IP_INITIALIZE_DONE, &actual_status, NX_IP_PERIODIC_RATE);
-
-    /* Check status...  */
-    if (status != NX_SUCCESS)
-    {
+    if (status != NX_SUCCESS){
         error_counter++;
         return;
     }
 
-    /* Create a socket.  */
+    // TCP Server Socket を作成する
+    // この機能は、指定された IP インスタンス用の TCP ソケットを作成します。
+    // このサービスにより、クライアントソケットとサーバソケットの両方が作成されます。
     status =  nx_tcp_socket_create(nx_iperf_test_ip, &tcp_server_socket, "TCP Server Socket",
                                    NX_IP_NORMAL, NX_FRAGMENT_OKAY, NX_IP_TIME_TO_LIVE, 32 * 1024,
                                    NX_NULL, nx_iperf_tcp_rx_disconnect_received);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         error_counter++;
         return;
     }
 
-    /* Setup this thread to listen.  */
+    // Setup this thread to listen.
+    // 指定した TCP ポートに対するリッスン要求とサーバソケットを登録します。
     status =  nx_tcp_server_socket_listen(nx_iperf_test_ip, NX_IPERF_TCP_RX_PORT, &tcp_server_socket, 5, nx_iperf_tcp_rx_connect_received);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         nx_tcp_socket_delete(&tcp_server_socket);
         error_counter++;
         return;
@@ -1606,22 +1606,18 @@ ULONG       port;
     /* Increment thread tcp rx's counter.  */
     thread_tcp_rx_counter++;
 
-    /* Accept a client socket connection.  */
+    // この関数は、アクティブなClient接続リクエストを受信した後にサーバーソケットを設定します。
     status =  nx_tcp_server_socket_accept(&tcp_server_socket, NX_WAIT_FOREVER);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         nx_tcp_server_socket_unlisten(nx_iperf_test_ip, NX_IPERF_TCP_RX_PORT);
         nx_tcp_socket_delete(&tcp_server_socket);
         error_counter++;
         return;
     }
 
-    /*Get source ip address*/
+    // この関数は、指定された TCP ソケットに接続されているピアの IP アドレスとポート番号を取得します。
     status = nxd_tcp_socket_peer_info_get(&tcp_server_socket, &ip_address, &port);
-    if (status)
-    {
+    if (status){
         nx_tcp_server_socket_unaccept(&tcp_server_socket);
         nx_tcp_server_socket_unlisten(nx_iperf_test_ip, NX_IPERF_TCP_RX_PORT);
         nx_tcp_socket_delete(&tcp_server_socket);
@@ -1657,10 +1653,7 @@ ULONG       port;
     {
         /* Receive a TCP message from the socket.  */
         status =  nx_tcp_socket_receive(&tcp_server_socket, &packet_ptr, NX_WAIT_FOREVER);
-
-        /* Check for error.  */
-        if (status)
-        {
+        if (status){
             error_counter++;
             break;
         }
@@ -1689,25 +1682,18 @@ ULONG       port;
 
     /* Disconnect the server socket.  */
     status =  nx_tcp_socket_disconnect(&tcp_server_socket, 10);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         error_counter++;
     }
 
     /* Unaccept the server socket.  */
     status =  nx_tcp_server_socket_unaccept(&tcp_server_socket);
     status += nx_tcp_server_socket_unlisten(nx_iperf_test_ip, NX_IPERF_TCP_RX_PORT);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         error_counter++;
     }
 
-    if (error_counter)
-    {
+    if (error_counter){
         ctrlInfo_ptr -> ErrorCode = error_counter;
     }
 
@@ -1742,24 +1728,6 @@ void nx_iperf_tcp_rx_cleanup(void)
 
     tx_thread_terminate(&thread_tcp_rx_iperf);
     tx_thread_delete(&thread_tcp_rx_iperf);
-}
-
-void nx_iperf_tcp_rx_test(UCHAR *stack_space, ULONG stack_size)
-{
-
-UINT status;
-
-    status = tx_thread_create(&thread_tcp_rx_iperf, "thread tcp rx",
-                              nx_iperf_thread_tcp_rx_entry,
-                              (ULONG)&nx_iperf_ctrl_info,
-                              stack_space, stack_size, NX_IPERF_THREAD_PRIORITY, NX_IPERF_THREAD_PRIORITY,
-                              TX_NO_TIME_SLICE, TX_AUTO_START);
-
-    if (status)
-    {
-        nx_iperf_ctrl_info.ErrorCode = 1;
-    }
-    return;
 }
 
 void    nx_iperf_thread_tcp_tx_entry(ULONG thread_input)
@@ -1818,20 +1786,14 @@ NXD_ADDRESS server_ip;
     status =  nx_tcp_socket_create(nx_iperf_test_ip, &tcp_client_socket, "TCP Client Socket",
                                    NX_IP_NORMAL, NX_FRAGMENT_OKAY, NX_IP_TIME_TO_LIVE, 32 * 1024,
                                    NX_NULL, NX_NULL);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         error_counter++;
         return;
     }
 
     /* Bind the socket.  */
     status =  nx_tcp_client_socket_bind(&tcp_client_socket, NX_ANY_PORT, NX_WAIT_FOREVER);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         nx_tcp_socket_delete(&tcp_client_socket);
         error_counter++;
         return;
@@ -1839,10 +1801,7 @@ NXD_ADDRESS server_ip;
 
     /* Attempt to connect the socket.  */
     status =  nxd_tcp_client_socket_connect(&tcp_client_socket, &server_ip, ctrlInfo_ptr -> port, NX_WAIT_FOREVER);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         nx_tcp_client_socket_unbind(&tcp_client_socket);
         nx_tcp_socket_delete(&tcp_client_socket);
         error_counter++;
@@ -1861,10 +1820,7 @@ NXD_ADDRESS server_ip;
 
     /* Set the packet size.  */
     status = nx_tcp_socket_mss_get(&tcp_client_socket, &packet_size);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         nx_tcp_socket_disconnect(&tcp_client_socket, NX_NO_WAIT);
         nx_tcp_client_socket_unbind(&tcp_client_socket);
         nx_tcp_socket_delete(&tcp_client_socket);
@@ -1875,13 +1831,9 @@ NXD_ADDRESS server_ip;
     /* Loop to transmit the packet.  */
     while (tx_time_get() < expire_time)
     {
-
         /* Allocate a packet.  */
         status =  nx_packet_allocate(nx_iperf_test_pool, &my_packet, NX_TCP_PACKET, NX_WAIT_FOREVER);
-
-        /* Check status.  */
-        if (status != NX_SUCCESS)
-        {
+        if (status != NX_SUCCESS){
             break;
         }
 
@@ -1894,8 +1846,7 @@ NXD_ADDRESS server_ip;
             remaining_size = 0;
 #endif /* NX_DISABLE_PACKET_CHAIN */
         }
-        else
-        {
+        else{
 #ifdef NX_DISABLE_PACKET_CHAIN
             packet_size = (ULONG)(my_packet -> nx_packet_data_end - my_packet -> nx_packet_prepend_ptr);
             my_packet -> nx_packet_append_ptr =  my_packet -> nx_packet_prepend_ptr + packet_size;
@@ -1908,15 +1859,10 @@ NXD_ADDRESS server_ip;
         my_packet -> nx_packet_length =  packet_size;
 
 #ifndef NX_DISABLE_PACKET_CHAIN
-        while (remaining_size)
-        {
-
+        while (remaining_size){
             /* Allocate a packet.  */
             status =  nx_packet_allocate(nx_iperf_test_pool, &packet_ptr, NX_TCP_PACKET, NX_WAIT_FOREVER);
-
-            /* Check status.  */
-            if (status != NX_SUCCESS)
-            {
+            if (status != NX_SUCCESS){
                 break;
             }
 
@@ -1934,24 +1880,20 @@ NXD_ADDRESS server_ip;
         }
 #endif /* NX_DISABLE_PACKET_CHAIN */
 
-        if (is_first)
-        {
+        if (is_first){
             memset(my_packet -> nx_packet_prepend_ptr, 0, (UINT)(my_packet -> nx_packet_data_end - my_packet -> nx_packet_prepend_ptr));
             is_first = NX_FALSE;
         }
 
         /* Send the packet out!  */
         status =  nx_tcp_socket_send(&tcp_client_socket, my_packet, NX_WAIT_FOREVER);
-
-        /* Determine if the status is valid.  */
-        if (status)
-        {
+        /* ステータスが有効かどうかを確認します。  */
+        if (status){
             error_counter++;
             nx_packet_release(my_packet);
             break;
         }
-        else
-        {
+        else{
 
             /* Update the counter.  */
             ctrlInfo_ptr -> PacketsTxed++;
@@ -1975,24 +1917,18 @@ NXD_ADDRESS server_ip;
 
     /* Disconnect this socket.  */
     status =  nx_tcp_socket_disconnect(&tcp_client_socket, NX_NO_WAIT);
-
-    /* Determine if the status is valid.  */
-    if (status)
-    {
+    /* ステータスが有効かどうかを確認します。 */
+    if (status){
         error_counter++;
     }
 
     /* Unbind the socket.  */
     status =  nx_tcp_client_socket_unbind(&tcp_client_socket);
-
-    /* Check for error.  */
-    if (status)
-    {
+    if (status){
         error_counter++;
     }
 
-    if (error_counter)
-    {
+    if (error_counter){
         ctrlInfo_ptr -> ErrorCode = error_counter;
     }
 

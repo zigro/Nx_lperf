@@ -15,52 +15,54 @@
   ******************************************************************************
   */
 #include "app_netxduo.h"
-#include <pthread.h>
+//#include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include "logmsg.h"
+//#include "nx_ip.h"
+//#include "nx_system.h"
 
 const char* const LevelMsg[] = {"DEBUG", "INFO", "MESSAGE", "RESERVED", "NOERROR", "WARNING", "ERROR", "FATAL" };
 
-static pthread_mutex_t lock;
+static TX_MUTEX    lock;
 
 void LogMsg_Init(){
-    pthread_mutex_init(&lock, NULL);
+	tx_mutex_create(&lock, "LOGMSG Mutex", 1);
     LOGMSG_ERROR("Hellow %s", "Abc");
-	LOGMSG_ERROR(" World")
-    printf
+	LOGMSG_ERROR(" World");
 }
-
-
-static void _LogMsg(const char* fmt, ...){
-    va_list ap;
-    va_start( ap, fmt );
-    vprintf( fmt, ap );
-    va_end( ap );
+/*
+void LogMsg(int level, const char* fmt){
+	if (level < LOGMSG_LEVEL)
+		return;
+    tx_mutex_get(&lock, NX_WAIT_FOREVER); //lockして同時アクセスを防ぐ
+    vprintf( fmt );
+    printf("\r\n");
+    tx_mutex_put(&lock);
 }
-
+*/
 void LogMsg(int level, const char* fmt, ...){
 	if (level < LOGMSG_LEVEL)
 		return;
     va_list ap;
     va_start( ap, fmt );
-    pthread_mutex_lock(&lock); //lockして同時アクセスを防ぐ
-    _LogMsg( fmt, ap );
-    _LogMsg( "\r\n" );
-    pthread_mutex_unlock(&lock);
+    tx_mutex_get(&lock, NX_WAIT_FOREVER); //lockして同時アクセスを防ぐ
+    vprintf( fmt, ap );
+    printf("\r\n");
+    tx_mutex_put(&lock);
     va_end( ap );
 }
 
 void DbgMsg(int level, const char* file, int line, const char* func, const char* fmt, ...){
 	if (level < LOGMSG_LEVEL)
 		return;
-	_LogMsg("%s:%d [%s] %s() ", file, line, LevelMsg[level], func);
     va_list ap;
     va_start( ap, fmt );
-    pthread_mutex_lock(&lock); //lockして同時アクセスを防ぐ
-    _LogMsg( fmt, ap );
-    _LogMsg( "\r\n" );
-    pthread_mutex_unlock(&lock);
+    tx_mutex_get(&lock, NX_WAIT_FOREVER); //lockして同時アクセスを防ぐ
+	printf("%s:%d [%s] %s() ", file, line, LevelMsg[level], func);
+    vprintf( fmt, ap );
+    printf("\r\n");
+    tx_mutex_put(&lock);
     va_end( ap );
 }
 
@@ -69,11 +71,11 @@ void AstMsg(int status, int level, const char* file, int line, const char* func,
 		return;
     va_list ap;
     va_start( ap, fmt );
-    pthread_mutex_lock(&lock); //lockして同時アクセスを防ぐ
-	_LogMsg("%s:%d [%s] %s(), status:%d  ", file, line, LevelMsg[level], func, status);
-    _LogMsg( fmt, ap );
-    _LogMsg( "\r\n" );
-    pthread_mutex_unlock(&lock);
+    tx_mutex_get(&lock, NX_WAIT_FOREVER); //lockして同時アクセスを防ぐ
+    printf("%s:%d [%s] %s(), status:%d  ", file, line, LevelMsg[level], func, status);
+    vprintf( fmt, ap );
+    printf("\r\n");
+    tx_mutex_put(&lock);
     va_end( ap );
 }
 
