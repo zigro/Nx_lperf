@@ -239,6 +239,8 @@ typedef struct
 #define choosetesttag \
     "<TD align=center><font align=center face=arial color=\"#FFFFFF\" size=\"5\">Choose a test from the left.</font></TD>\r\n"
 
+#ifdef NX_IPREF_DEFINE
+
 const unsigned char mslogo_jpg[] = {
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
     0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -2215,4 +2217,4 @@ const unsigned char nxlogo_png[] = {
 };
 
 unsigned int        nxlogo_png_size = sizeof(nxlogo_png);
-
+#endif

@@ -88,130 +88,123 @@ static VOID App_Link_Thread_Entry(ULONG thread_input);
 UINT MX_NetXDuo_Init(VOID *memory_ptr)
 {
 	TX_BYTE_POOL *byte_pool = (TX_BYTE_POOL*)memory_ptr;
-
-	/* USER CODE BEGIN App_NetXDuo_MEM_POOL */
-	printf("Nx_Iperf application started..\n");
-
-	/* USER CODE END App_NetXDuo_MEM_POOL */
-	/* USER CODE BEGIN 0 */
-
-	/* USER CODE END 0 */
-
-	/* Initialize the NetXDuo system. */
 	CHAR *pointer;
+
+	printf("Nx_Iperf application started..\n");
+	// Initialize the NetXDuo system.
 	nx_system_initialize();
 
-	/* packet_pool用メモリ確保 */
-	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
-			tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_PACKET_POOL_SIZE, TX_NO_WAIT))){
-		return TX_POOL_ERROR;
-	}
-	/* パケット割り当てに使用するパケットプールを作成します。
-	 * 余分な NX_PACKET を使用する場合は、NX_APP_PACKET_POOL_SIZE を大きくする必要があります。
-	 */
-	if (NX_SUCCESS != ASSERT_ERROR("nx_packet_pool_create",
-			nx_packet_pool_create(&NxAppPool, "NetXDuo App Pool", DEFAULT_PAYLOAD_SIZE, pointer, NX_APP_PACKET_POOL_SIZE))){
-		return NX_NOT_SUCCESSFUL;
-	}
+	// CREATE PACKET POOL
+		// Allocate the memory for packet_pool.  
+		if (TX_SUCCESS != ASSERT_ERROR("nx_packet_pool_allocate",
+				tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_PACKET_POOL_SIZE, TX_NO_WAIT))){
+			return TX_POOL_ERROR;
+		}
+		// パケット割り当てに使用するパケットプールを作成します。
+		// 余分な NX_PACKET を使用する場合は、**NX_APP_PACKET_POOL_SIZE** を大きくする必要があります。
+		if (NX_SUCCESS != ASSERT_ERROR("nx_packet_pool_create",
+				nx_packet_pool_create(&NxAppPool, "NetXDuo App Pool", DEFAULT_PAYLOAD_SIZE, pointer, NX_APP_PACKET_POOL_SIZE))){
+			return NX_NOT_SUCCESSFUL;
+		}
 
-	/* Ip_Instance用メモリ確保 */
-	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
-			tx_byte_allocate(byte_pool, (VOID **) &pointer, Nx_IP_INSTANCE_THREAD_SIZE, TX_NO_WAIT))){
-		return TX_POOL_ERROR;
-	}
+	// CREATE IP INSTANCE 
+		// Allocate the memory for Ip_Instance
+		if (TX_SUCCESS != ASSERT_ERROR("nx_ip_allocate",
+				tx_byte_allocate(byte_pool, (VOID **) &pointer, Nx_IP_INSTANCE_THREAD_SIZE, TX_NO_WAIT))){
+			return TX_POOL_ERROR;
+		}
+		// Create the main NX_IP instance
+		if (NX_SUCCESS != ASSERT_ERROR("nx_ip_create",
+				nx_ip_create(&NetXDuoEthIpInstance, "NetX Ip instance", DefaultIpAddress, DefaultSubNetMask,
+						&NxAppPool, nx_stm32_eth_driver, pointer, Nx_IP_INSTANCE_THREAD_SIZE, NX_APP_INSTANCE_PRIORITY))){
+			return NX_NOT_SUCCESSFUL;
+		}
 
-	/* Create the main NX_IP instance */
-	if (NX_SUCCESS != ASSERT_ERROR("nx_ip_create",
-			nx_ip_create(&NetXDuoEthIpInstance, "NetX Ip instance", DefaultIpAddress, DefaultSubNetMask,
-					&NxAppPool, nx_stm32_eth_driver,	pointer, Nx_IP_INSTANCE_THREAD_SIZE, NX_APP_INSTANCE_PRIORITY))){
-		return NX_NOT_SUCCESSFUL;
-	}
+	// CREATE ARP
+		// Allocate the memory for ARP
+		if (TX_SUCCESS != ASSERT_ERROR("nx_arp_allocate",
+				tx_byte_allocate(byte_pool, (VOID **) &pointer, DEFAULT_ARP_CACHE_SIZE, TX_NO_WAIT))){
+			return TX_POOL_ERROR;
+		}
+		// Enable the ARP protocol and provide the ARP cache size for the IP instance
+		if (NX_SUCCESS != ASSERT_ERROR("nx_arp_enable",
+				nx_arp_enable(&NetXDuoEthIpInstance, (VOID *)pointer, DEFAULT_ARP_CACHE_SIZE))){
+			return NX_NOT_SUCCESSFUL;
+		}
 
-	/* Allocate the memory for ARP */
-	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
-			tx_byte_allocate(byte_pool, (VOID **) &pointer, DEFAULT_ARP_CACHE_SIZE, TX_NO_WAIT))){
-		return TX_POOL_ERROR;
-	}
-	/* Enable the ARP protocol and provide the ARP cache size for the IP instance */
-	if (NX_SUCCESS != ASSERT_ERROR("nx_arp_enable",
-			nx_arp_enable(&NetXDuoEthIpInstance, (VOID *)pointer, DEFAULT_ARP_CACHE_SIZE))){
-		return NX_NOT_SUCCESSFUL;
-	}
 
-	/* Enable the ICMP */
+	// Enable the ICMP
 	if (NX_SUCCESS != ASSERT_ERROR("nx_icmp_enable",
 			nx_icmp_enable(&NetXDuoEthIpInstance))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
-	/* Enable TCP Protocol */
+	// Enable TCP Protocol
 	if (NX_SUCCESS != ASSERT_ERROR("nx_tcp_enable",
 			nx_tcp_enable(&NetXDuoEthIpInstance))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
-	/* Enable the UDP protocol required for  DHCP communication */
+	// Enable the UDP protocol required for  DHCP communication
 	if (NX_SUCCESS != ASSERT_ERROR("nx_udp_enable",
 			nx_udp_enable(&NetXDuoEthIpInstance))){
 		return NX_NOT_SUCCESSFUL;
 	}
 
-	/* Allocate the memory for main thread   */
-	if (TX_SUCCESS != ASSERT_ERROR("tx_byte_allocate",
-			tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_THREAD_STACK_SIZE, TX_NO_WAIT))){
-		return TX_POOL_ERROR;
-	}
-	/* Create the main thread */
-	if (TX_SUCCESS != ASSERT_ERROR("tx_thread_create",
-			tx_thread_create(&NxAppThread, "NetXDuo App thread", nx_app_thread_entry , 0, pointer, NX_APP_THREAD_STACK_SIZE,
-					NX_APP_THREAD_PRIORITY, NX_APP_THREAD_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
-		return TX_THREAD_ERROR;
-	}
+	// CREATE MAIN THREAD
+		// Allocate the memory for main thread
+		if (TX_SUCCESS != ASSERT_ERROR("tx_thread_allocate",
+				tx_byte_allocate(byte_pool, (VOID **) &pointer, NX_APP_THREAD_STACK_SIZE, TX_NO_WAIT))){
+			return TX_POOL_ERROR;
+		}
+		// Create the main thread
+		if (TX_SUCCESS != ASSERT_ERROR("tx_thread_create",
+				tx_thread_create(&NxAppThread, "NetXDuo App thread", nx_app_thread_entry , 0, pointer, NX_APP_THREAD_STACK_SIZE,
+						NX_APP_THREAD_PRIORITY, NX_APP_THREAD_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
+			return TX_THREAD_ERROR;
+		}
 
+	// CREATE DHCP CLIENT
 	if (DefaultIpAddress == 0){
 		// DefaultIpAddress == 0 ならばDHCPでの接続を行う
-		/* Create the DHCP client */
+		// Create the DHCP client
 		if (NX_SUCCESS != ASSERT_ERROR("nx_dhcp_create",
 				nx_dhcp_create(&DHCPClient, &NetXDuoEthIpInstance, "DHCP Client"))){
 			return NX_DHCP_ERROR;
 		}
+		// set DHCP notification callback
+		tx_semaphore_create(&DHCPSemaphore, "DHCP Semaphore", 0);
 	}
 
-	/* set DHCP notification callback  */
-	tx_semaphore_create(&DHCPSemaphore, "DHCP Semaphore", 0);
+	// CREATE HTTP SERVER
+		// Allocate the memory for HTTP server
+		ASSERT_FATALERROR("HTTP Server packet pool memory allocation",
+				tx_byte_allocate(byte_pool, (VOID **) &pointer, SERVER_POOL_SIZE, TX_NO_WAIT));
+		// Create the HTTP server packet pool.
+		ASSERT_FATALERROR("HTTP Server packet pool creation",
+				nx_packet_pool_create(&WebServerPool, "HTTP Server Packet Pool", SERVER_PACKET_SIZE, nx_server_pool, SERVER_POOL_SIZE));
+		// Allocate the memory for HTTP Server stack.
+		ASSERT_FATALERROR("Server stack memory allocation",
+				tx_byte_allocate(byte_pool, (VOID **) &pointer, HTTP_STACK_SIZE, TX_NO_WAIT));
+		http_stack = (UCHAR *)pointer;
 
-	/* USER CODE BEGIN MX_NetXDuo_Init */
-
-	/* Allocate the server packet pool. */
-	ASSERT_FATALERROR("Packed pool memory allocation",
-			tx_byte_allocate(byte_pool, (VOID **) &pointer, SERVER_POOL_SIZE, TX_NO_WAIT));
-	/* Create the server packet pool. */
-	ASSERT_FATALERROR("Server pool creation",
-			nx_packet_pool_create(&WebServerPool, "HTTP Server Packet Pool", SERVER_PACKET_SIZE, nx_server_pool, SERVER_POOL_SIZE));
-
-	/* Set the server stack and IPerf stack.  */
-	/* Allocate the server stack. */
-	ASSERT_FATALERROR("Server stack memory allocation",
-			tx_byte_allocate(byte_pool, (VOID **) &pointer, HTTP_STACK_SIZE, TX_NO_WAIT));
-	http_stack = (UCHAR *)pointer;
-
-	/* Allocate the IPERF stack. */
+	// Allocate the memory for the IPERF stack.
 	ASSERT_FATALERROR("IPERF stack memory allocation",
 			tx_byte_allocate(byte_pool, (VOID **) &pointer, IPERF_STACK_SIZE, TX_NO_WAIT));
 	iperf_stack = (UCHAR *)pointer;
 
-	/* Allocate the memory for Link thread   */
-	if (TX_SUCCESS != ASSERT_ERROR("Allocate the memory for App Link thread",
-			tx_byte_allocate(byte_pool, (VOID **) &pointer,2 *  DEFAULT_MEMORY_SIZE, TX_NO_WAIT))){
-		return TX_POOL_ERROR;
-	}
-
-	/* create the Link thread */
-	if (TX_SUCCESS != ASSERT_ERROR("Create the App Link thread",
-			tx_thread_create(&AppLinkThread, "App Link Thread", App_Link_Thread_Entry, 0, pointer, 2 * DEFAULT_MEMORY_SIZE,
-					LINK_PRIORITY, LINK_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
-		return NX_NOT_ENABLED;
-	}
+	// CREATE LINK THREAD
+		// Allocate the memory for Link thread
+		if (TX_SUCCESS != ASSERT_ERROR("Allocate the memory for App Link thread",
+				tx_byte_allocate(byte_pool, (VOID **) &pointer,2 *  DEFAULT_MEMORY_SIZE, TX_NO_WAIT))){
+			return TX_POOL_ERROR;
+		}
+		// create the Link thread
+		if (TX_SUCCESS != ASSERT_ERROR("Create the App Link thread",
+				tx_thread_create(&AppLinkThread, "App Link Thread", App_Link_Thread_Entry, 0, pointer, 2 * DEFAULT_MEMORY_SIZE,
+						LINK_PRIORITY, LINK_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
+			return NX_NOT_ENABLED;
+		}
 
 	// IPAddressを表示
 	ASSERT_FATALERROR("nx_ip_address_get",
