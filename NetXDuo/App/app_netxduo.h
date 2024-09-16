@@ -65,6 +65,14 @@ extern "C" {
                                                 addr& 0xff);\
                                            }while(0)
 
+#define PRINT_IP_ADDRESS_PORT(addr,port)  do { \
+                                                printf("STM32 %s: %lu.%lu.%lu.%lu : %u\n", #addr, \
+                                                (addr >> 24) & 0xff, \
+                                                (addr >> 16) & 0xff, \
+                                                (addr >> 8) & 0xff, \
+                                                addr& 0xff, port);\
+                                           }while(0)
+
 #define PRINT_DATA(addr, port, data)       do { \
                                                 printf("[%lu.%lu.%lu.%lu:%u] -> '%s' \n", \
                                                 (addr >> 24) & 0xff, \

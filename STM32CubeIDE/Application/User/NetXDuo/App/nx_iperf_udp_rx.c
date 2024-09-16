@@ -62,13 +62,18 @@ void nx_iperf_thread_udp_rx_entry(ULONG thread_input);
 
 void nx_iperf_udp_rx_test(UCHAR *stack_space, ULONG stack_size)
 {
-UINT status;
-
-    status = tx_thread_create(&thread_udp_rx_iperf, "thread udp rx",
-                              nx_iperf_thread_udp_rx_entry,
-                              (ULONG)&nx_iperf_ctrl_info,
-                              stack_space, stack_size, NX_WEB_HTTP_SERVER_PRIORITY + 1, NX_WEB_HTTP_SERVER_PRIORITY + 1,
-                              TX_NO_TIME_SLICE, TX_AUTO_START);
+    UINT status;
+    status = tx_thread_create(
+                &thread_udp_rx_iperf, 
+                "thread udp rx", 
+                nx_iperf_thread_udp_rx_entry,
+                (ULONG)&nx_iperf_ctrl_info, 
+                stack_space, stack_size, 
+                NX_WEB_HTTP_SERVER_PRIORITY + 1, 
+                NX_WEB_HTTP_SERVER_PRIORITY + 1,
+                TX_NO_TIME_SLICE, 
+                TX_AUTO_START
+                );
 
     if (status)
     {

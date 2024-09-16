@@ -4619,10 +4619,5 @@
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/FileX/App/app_filex.c</locationURI>
 		</link>
-		<link>
-			<name>Application/User/NetXDuo/App/app_netxduo.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/NetXDuo/App/app_netxduo.c</locationURI>
-		</link>
 	</linkedResources>
 </projectDescription>

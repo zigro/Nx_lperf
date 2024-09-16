@@ -24,50 +24,39 @@
 
 /* Private includes ----------------------------------------------------------*/
 #include "nxd_dhcp_client.h"
-/* USER CODE BEGIN Includes */
-
-/* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
 /* Define the ThreadX and NetX object control blocks...  */
-TX_THREAD AppLinkThread;
-TX_SEMAPHORE Semaphore;
+TX_THREAD		AppLinkThread;
+TX_SEMAPHORE	Semaphore;
+NX_PACKET_POOL	WebServerPool;
 
-NX_PACKET_POOL WebServerPool;
+UINT	DHCP_Enabled			=	0;
+ULONG	DefaultIpAddress		=	IP_ADDRESS(172,  16,  51,  80);
+ULONG	DefaultSubNetMask		=	IP_ADDRESS(255, 255,   0,   0);
+#define	DEFAULT_IP_ADDRESS			IP_ADDRESS(192, 168,   0, 100)
+#define	DEFAULT_NET_MASK			IP_ADDRESS(255, 255,   0,   0)
 
-ULONG DefaultIpAddress =	IP_ADDRESS(172,  16,  51,  81);
-ULONG DefaultSubNetMask =	IP_ADDRESS(255, 255,   0,   0);
+ULONG	IpAddress;
+ULONG	NetMask;
 
-ULONG IpAddress;
-ULONG NetMask;
-
-UCHAR *http_stack;
-UCHAR *iperf_stack;
-
+UCHAR	*http_stack;
+UCHAR	*iperf_stack;
 
 static uint8_t nx_server_pool[SERVER_POOL_SIZE];
 
-/* USER CODE END PTD */
-
 /* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TX_THREAD      NxAppThread;
-NX_PACKET_POOL NxAppPool;
-NX_IP          NetXDuoEthIpInstance;
-TX_SEMAPHORE   DHCPSemaphore;
-NX_DHCP        DHCPClient;
+TX_THREAD		NxAppThread;
+NX_PACKET_POOL	NxAppPool;
+NX_IP			NetXDuoEthIpInstance;
+TX_SEMAPHORE	DHCPSemaphore;
+NX_DHCP			DHCPClient;
 
-TX_THREAD AppTCPThread;
+TX_THREAD		AppTCPThread;
 
 /* USER CODE BEGIN PV */
 
@@ -223,7 +212,7 @@ UINT MX_NetXDuo_Init(VOID *memory_ptr)
 
 
 
-/**
+/**------------------------------------------------------------------------------------------------
  * @brief  ip address change callback.
  * @param ip_instance: NX_IP instance
  * @param ptr: user data
@@ -235,18 +224,17 @@ static VOID ip_address_change_notify_callback(NX_IP *ip_instance, VOID *ptr)
 	tx_semaphore_put(&DHCPSemaphore);
 }
 
-/**------------------------------------------------------------------------------------------------
- * @brief  Main thread entry.
+/** ------------------------------------------------------------------------------------------------
+ * @brief Main thread entry.
  * @param thread_input: ULONG user argument used by the thread entry
  * @retval none
  */
 static VOID nx_app_thread_entry (ULONG thread_input)
 {
 	// CREATE DHCP CLIENT
-	// (DefaultIpAddress == 0)ならばDHCPによるアドレス解決を行う
+	// DHCP_Enabled ならばDHCPによるアドレス解決を行う
 	// TODO 起動時のみのDHCPであり、DHCP経由でのアドレス変更は未対応
-	if (DefaultIpAddress == 0){
-		// DefaultIpAddress == 0 ならばDHCPでの接続を行う
+	if ( DHCP_Enabled != 0 ){
 		// Create the DHCP client
 		if (NX_SUCCESS != ASSERT_ERROR("nx_dhcp_create",
 				nx_dhcp_create(&DHCPClient, &NetXDuoEthIpInstance, "DHCP Client"))){
@@ -290,65 +278,179 @@ static VOID nx_app_thread_entry (ULONG thread_input)
 	tx_thread_relinquish();
 }
 
+/** ------------------------------------------------------------------------------------------------
+ * 
+ */
+typedef struct TCPTask_Struct {
+    NX_TCP_SOCKET Socket;	// TcpSocket
+	UINT Port;				// 
+	NX_PACKET *rx_packet;
+	void (*RecieveCallback)(UCHAR* buffer, UINT buffer_length);
+} TCPTask;
+
+typedef struct UDPTask_Struct {
+    NX_UDP_SOCKET Socket;	//
+	UINT	Port;			// DEFAULT_PORT
+	NXD_ADDRESS	RemoteIP;
+	UINT	RemotePort;
+	ULONG	QueueMax;		// QUEUE_MAX_SIZE
+	NX_PACKET *rx_packet;
+	void (*RecieveCallback)(UCHAR* buffer, UINT buffer_length);
+} UDPTask;
+
+/** ------------------------------------------------------------------------------------------------
+ * @brief 
+ * @param 
+ * @retval 
+ */
+static VOID App_UDP_Thread_Entry(ULONG thread_input){
+    UDPTask *this = (UDPTask*)thread_input;
+	UINT ret;
+
+	// create the UDP socket
+	if (nx_udp_socket_create(&NetXDuoEthIpInstance, &this->Socket, "UDP Server Socket", 
+				NX_IP_NORMAL, NX_FRAGMENT_OKAY, NX_IP_TIME_TO_LIVE, this->QueueMax) != NX_SUCCESS)
+		Error_Handler();
+	// bind the socket indefinitely on the required port
+	if (nx_udp_socket_bind(&this->Socket, this->Port, TX_WAIT_FOREVER) != NX_SUCCESS)
+		Error_Handler();
+
+	printf("UDP Server listening on PORT %d.. \n", this->Port);
+	while(1){
+		if (nx_udp_socket_receive(&this->Socket, &this->rx_packet, 100) == NX_SUCCESS){
+			ULONG bytes_read;
+			UCHAR data_buffer[512] = {0,};
+			TX_MEMSET(data_buffer, '\0', sizeof(data_buffer));
+
+			nx_packet_data_retrieve(this->rx_packet, data_buffer, &bytes_read);
+			nx_udp_source_extract(this->rx_packet, &this->RemoteIP, &this->RemotePort);
+    		nx_packet_release(this->rx_packet);
+		//	PRINT_IP_ADDRESS_PORT(source_ip_address, source_port);
+			if (this->RecieveCallback != NULL)
+				this->RecieveCallback(data_buffer, bytes_read);
+		}
+	}
+}
 
 
-/**------------------------------------------------------------------------------------------------
+VOID UdpSend(UDPTask* this, VOID* data_buf, ULONG data_len){
+	UINT         ret;
+	NX_PACKET   *packet = NX_NULL;
+//	NXD_ADDRESS  server_ip = {
+//		.nxd_ip_version 	= this->version, // NX_IP_VERSION_V4
+//		.nxd_ip_address.v4	= this->ip
+//	};
+
+    /* Send the end of test indicator. */
+    ret = nx_packet_allocate(nx_iperf_test_pool, &packet, NX_UDP_PACKET, TX_WAIT_FOREVER);
+    if (ret != NX_SUCCESS)
+      Error_Handler();
+
+    ret = nx_packet_data_append(packet, data_buf, data_len, &NxAppPool, TX_WAIT_FOREVER);
+    if (ret != NX_SUCCESS)
+      Error_Handler();
+
+    /* Send the UDP packet.  */
+    ret = nxd_udp_socket_send(&this->Socket, packet, &this->RemoteIP, this->RemotePort);
+    if (ret != NX_SUCCESS)
+        nxd_packet_release(packet);
+}
+
+/** -----------------------------------------------------------------------------------------------
+* @brief  TCP thread entry.
+* @param thread_input: thread user data
+* @retval none
+*/
+static VOID App_TCP_Thread_Entry(ULONG thread_input){
+    UINT	ret;
+    UCHAR	data_buffer[512];
+    ULONG	bytes_read;
+    ULONG	remote_ip_address;
+    UINT	remote_port;
+    NX_PACKET *rx_packet;
+
+    // create the TCP socket
+    ret = nx_tcp_socket_create(&NetXDuoEthIpInstance, &TCPSocket, "TCP Server Socket", 
+				NX_IP_NORMAL, NX_FRAGMENT_OKAY, NX_IP_TIME_TO_LIVE, WINDOW_SIZE, NX_NULL, NX_NULL);
+    if (ret != NX_SUCCESS){
+      	Error_Handler();
+    }
+
+    // bind the client socket for the DEFAULT_PORT
+    ret =  nx_tcp_client_socket_bind(&TCPSocket, DEFAULT_PORT, NX_WAIT_FOREVER);
+    if (ret != NX_SUCCESS){
+      	Error_Handler();
+    }
+
+    /* connect to the remote server on the specified port */
+    ret = nx_tcp_client_socket_connect(&TCPSocket, TCP_SERVER_ADDRESS, TCP_SERVER_PORT, NX_WAIT_FOREVER);
+    if (ret != NX_SUCCESS){
+      	Error_Handler();
+    }
+    remote_ip_address = TCPSocket.nx_tcp_socket_connect_ip.nxd_ip_address.v4;
+    remote_port       = TCPSocket.nx_tcp_socket_connect_port;
+    PRINT_IP_ADDRESS_PORT(remote_ip_address, remote_port);
+   
+    while(1)
+    {
+        TX_MEMSET(data_buffer, '\0', sizeof(data_buffer));
+        ret = nx_tcp_socket_receive(&TCPSocket, &rx_packet, DEFAULT_TIMEOUT);
+        if (ret != NX_SUCCESS)
+          break;
+        /* retrieve the data sent by the server */
+        nx_packet_data_retrieve(rx_packet, data_buffer, &bytes_read);
+        // TODO Write Uart
+
+        /* release the server packet */
+        nx_packet_release(rx_packet);
+        /* toggle the green led on success */
+        HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+    }
+    nx_packet_release(rx_packet);
+    nx_tcp_socket_disconnect(&TCPSocket, DEFAULT_TIMEOUT);
+    nx_tcp_client_socket_unbind(&TCPSocket);
+    nx_tcp_socket_delete(&TCPSocket);
+}
+
+
+/** -----------------------------------------------------------------------------------------------
  * @brief  Link thread entry
  * @param thread_input: ULONG thread parameter
  * @retval none
  */
-static VOID App_Link_Thread_Entry(ULONG thread_input)
-{
-	ULONG actual_status;
-	UINT linkdown = 0, status;
-
-	while(1)
-	{
-		/* Get Physical Link status. */
-		status = nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_LINK_ENABLED,
-				&actual_status, 10);
-
-		if(status == NX_SUCCESS)
-		{
-			if(linkdown == 1)
-			{
-				linkdown = 0;
-				status = nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_ADDRESS_RESOLVED,
-						&actual_status, 10);
-				if(status == NX_SUCCESS)
-				{
-					/* The network cable is connected again. */
-					printf("The network cable is connected again.\n");
-					/* Print IPERF is available again. */
-					printf("IPERF is available again.\n");
-				}
-				else
-				{
-					/* The network cable is connected. */
-					printf("The network cable is connected.\n");
-					/* Send command to Enable Nx driver. */
-					nx_ip_driver_direct_command(&NetXDuoEthIpInstance, NX_LINK_ENABLE,
-							&actual_status);
-#ifdef DHCP_ENABLED
-					/* Restart DHCP Client. */
-					nx_dhcp_stop(&DHCPClient);
-					nx_dhcp_start(&DHCPClient);
-#endif
-				}
-			}
-		}
-		else
-		{
-			if(0 == linkdown)
-			{
-				linkdown = 1;
-				/* The network cable is not connected. */
-				printf("The network cable is not connected.\n");
-			}
-		}
-
-		tx_thread_sleep(NX_APP_CABLE_CONNECTION_CHECK_PERIOD);
-	}
+static VOID App_Link_Thread_Entry(ULONG thread_input){
+    ULONG actual_status;
+    UINT linkdown = 0, status;
+    while(1){
+        /* Get Physical Link status. */
+        status = nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_LINK_ENABLED, &actual_status, 10);
+        if( status == NX_SUCCESS ){	// NX_IP_LINK_ENABLED
+            if( linkdown == 1 ){ // LINK DOWN -> UP
+                linkdown = 0;
+                status = nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_ADDRESS_RESOLVED, &actual_status, 10);
+                if( status == NX_SUCCESS ){ // ADDRESS RESOLVED
+                    printf("The network cable is connected again.\n");
+                    printf("TCP Echo Client is available again.\n");
+                }
+                else{
+                    printf("The network cable is connected.\n");
+                    /* Send command to Enable Nx driver. */
+                    nx_ip_driver_direct_command(&NetXDuoEthIpInstance, NX_LINK_ENABLE, &actual_status);
+                    /* Restart DHCP Client. */
+					if (DHCP_Enabled != 0){
+                	    nx_dhcp_stop(&DHCPClient);
+                    	nx_dhcp_start(&DHCPClient);
+					}
+                }
+            }
+        }
+        else{ // NX_IP_LINK_DISABLED
+            if( linkdown == 0 ){ // LINK UP -> DOWN
+                linkdown = 1;
+                /* The network cable is not connected. */
+                printf("The network cable is not connected.\n");
+            }
+        }
+        tx_thread_sleep(NX_APP_CABLE_CONNECTION_CHECK_PERIOD);
+    }
 }
-
-/* USER CODE END 1 */
