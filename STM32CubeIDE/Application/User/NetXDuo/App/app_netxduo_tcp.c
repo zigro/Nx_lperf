@@ -76,238 +76,6 @@ static VOID App_Link_Thread_Entry(ULONG thread_input);
 /* USER CODE END PFP */
 
 
-/**
- * @brief  Application NetXDuo Initialization.
- * @param memory_ptr: memory pointer
- * @retval int
- */
-UINT MX_NetXDuo_Init(VOID *memory_ptr)
-{
-	TxBytePool = (TX_BYTE_POOL*)memory_ptr;
-
-	printf("NetXDuo application started..\n");
-	// Initialize the NetXDuo system.
-	nx_system_initialize();
-
-	// CREATE PACKET POOL
-	// アプリ内の通信で使用する通信パケット用メモリを確保する
-	{
-		CHAR *pointer;
-		// Allocate the memory for packet_pool.  
-		if (TX_SUCCESS != ASSERT_ERROR("nx_packet_pool_allocate",
-				tx_byte_allocate(TxBytePool, (VOID **) &pointer, NX_APP_PACKET_POOL_SIZE, TX_NO_WAIT))){
-			return TX_POOL_ERROR;
-		}
-		// パケット割り当てに使用するパケットプールを作成します。
-		// 余分な NX_PACKET を使用する場合は、**NX_APP_PACKET_POOL_SIZE** を大きくする必要があります。
-		if (NX_SUCCESS != ASSERT_ERROR("nx_packet_pool_create",
-				nx_packet_pool_create(&NxPacketPool, "NetXDuo App Pool", DEFAULT_PAYLOAD_SIZE, pointer, NX_APP_PACKET_POOL_SIZE))){
-			return NX_NOT_SUCCESSFUL;
-		}
-	}
-
-	// CREATE IP INSTANCE 
-	{
-		CHAR *pointer;
-		// Allocate the memory for Ip_Instance
-		if (TX_SUCCESS != ASSERT_ERROR("nx_ip_allocate",
-				tx_byte_allocate(TxBytePool, (VOID **) &pointer, Nx_IP_INSTANCE_THREAD_SIZE, TX_NO_WAIT))){
-			return TX_POOL_ERROR;
-		}
-		// Create the main NX_IP instance
-		if (NX_SUCCESS != ASSERT_ERROR("nx_ip_create",
-				nx_ip_create(&NetXDuoEthIpInstance, "NetX Ip instance", DefaultIpAddress, DefaultSubNetMask,
-						&NxPacketPool, nx_stm32_eth_driver, pointer, Nx_IP_INSTANCE_THREAD_SIZE, NX_APP_INSTANCE_PRIORITY))){
-			return NX_NOT_SUCCESSFUL;
-		}
-	}
-
-	// CREATE ARP
-	{
-		CHAR *pointer;
-		// Allocate the memory for ARP
-		if (TX_SUCCESS != ASSERT_ERROR("nx_arp_allocate",
-				tx_byte_allocate(TxBytePool, (VOID **) &pointer, DEFAULT_ARP_CACHE_SIZE, TX_NO_WAIT))){
-			return TX_POOL_ERROR;
-		}
-		// Enable the ARP protocol and provide the ARP cache size for the IP instance
-		if (NX_SUCCESS != ASSERT_ERROR("nx_arp_enable",
-				nx_arp_enable(&NetXDuoEthIpInstance, (VOID *)pointer, DEFAULT_ARP_CACHE_SIZE))){
-			return NX_NOT_SUCCESSFUL;
-		}
-		// Enable the ICMP
-		if (NX_SUCCESS != ASSERT_ERROR("nx_icmp_enable",
-				nx_icmp_enable(&NetXDuoEthIpInstance))){
-			return NX_NOT_SUCCESSFUL;
-		}
-	}
-
-	// CREATE TCP THREAD
-	// 
-	{
-		CHAR *pointer;
-		// Allocate the memory for TCP server thread
-		if (TX_SUCCESS != ASSERT_ERROR("nx_tcp_allocate",
-				tx_byte_allocate(TxBytePool, (VOID**) &pointer, 2 * DEFAULT_ARP_CACHE_SIZE, TX_NO_WAIT))){
-			return TX_POOL_ERROR;
-		}
-		// Create the TCP server thread 
-		if (TX_SUCCESS != ASSERT_ERROR("nx_tcp_thread",
-				tx_thread_create(&AppTCPThread, "App TCP Thread", App_TCP_Thread_Entry, 0, pointer, NX_APP_THREAD_STACK_SIZE,
-				NX_APP_THREAD_PRIORITY, NX_APP_THREAD_PRIORITY, TX_NO_TIME_SLICE, TX_DONT_START))){
-			return NX_NOT_SUCCESSFUL;
-		}
-		// Enable TCP Protocol
-		if (NX_SUCCESS != ASSERT_ERROR("nx_tcp_enable",
-				nx_tcp_enable(&NetXDuoEthIpInstance))){
-			return NX_NOT_SUCCESSFUL;
-		}
-	}
-
-	// Enable the UDP protocol required for  DHCP communication
-	if (NX_SUCCESS != ASSERT_ERROR("nx_udp_enable",
-			nx_udp_enable(&NetXDuoEthIpInstance))){
-		return NX_NOT_SUCCESSFUL;
-	}
-
-	// CREATE MAIN THREAD
-	{
-		CHAR *stack_space;
-		// Allocate the memory for main thread
-		if (TX_SUCCESS != ASSERT_ERROR("tx_thread_allocate",
-				tx_byte_allocate(TxBytePool, (VOID **) &stack_space, NX_APP_THREAD_STACK_SIZE, TX_NO_WAIT))){
-			return TX_POOL_ERROR;
-		}
-		// Allocate the memory for HTTP Server stack.
-		// Create the main thread
-		if (TX_SUCCESS != ASSERT_ERROR("tx_thread_create",
-				tx_thread_create(&NxAppThread, "NetXDuo App thread", nx_app_thread_entry , 0, stack_space, NX_APP_THREAD_STACK_SIZE,
-						NX_APP_THREAD_PRIORITY, NX_APP_THREAD_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
-			return TX_THREAD_ERROR;
-		}
-	}
-
-#if HTTP_ENABLED
-	// CREATE HTTP SERVER
-	{
-		CHAR *pointer;
-		// Allocate the memory for HTTP server
-		ASSERT_FATALERROR("HTTP Server packet pool memory allocation",
-				tx_byte_allocate(TxBytePool, (VOID **) &pointer, SERVER_POOL_SIZE, TX_NO_WAIT));
-		// Create the HTTP server packet pool.
-		ASSERT_FATALERROR("HTTP Server packet pool creation",
-				nx_packet_pool_create(&WebServerPool, "HTTP Server Packet Pool", SERVER_PACKET_SIZE, nx_server_pool, SERVER_POOL_SIZE));
-		// Allocate the memory for HTTP Server stack.
-		ASSERT_FATALERROR("Server stack memory allocation",
-				tx_byte_allocate(TxBytePool, (VOID **) &pointer, HTTP_STACK_SIZE, TX_NO_WAIT));
-		http_stack = (UCHAR *)pointer;
-	}
-#endif
-//	{
-//		CHAR *pointer;
-//		// Allocate the memory for the Application stack.
-//		ASSERT_FATALERROR("Application stack memory allocation",
-//				tx_byte_allocate(TxBytePool, (VOID **) &pointer, APPLY_STACK_SIZE, TX_NO_WAIT));
-//		Apply_stack = (UCHAR *)pointer;
-//	}
-
-	// CREATE LINK THREAD
-	{
-		CHAR *stack_space;
-		// Allocate the memory for Link thread
-		if (TX_SUCCESS != ASSERT_ERROR("Allocate the memory for App Link thread",
-				tx_byte_allocate(TxBytePool, (VOID **) &stack_space,2 *  DEFAULT_MEMORY_SIZE, TX_NO_WAIT))){
-			return TX_POOL_ERROR;
-		}
-		// create the Link thread
-		if (TX_SUCCESS != ASSERT_ERROR("Create the App Link thread",
-				tx_thread_create(&AppLinkThread, "App Link Thread", App_Link_Thread_Entry, 0, stack_space, 2 * DEFAULT_MEMORY_SIZE,
-						LINK_PRIORITY, LINK_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START))){
-			return NX_NOT_ENABLED;
-		}
-	}
-
-	// IPAddressを表示
-	ASSERT_FATALERROR("nx_ip_address_get",
-			nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask));
-	PRINT_IP_ADDRESS(IpAddress);
-
-	if (IpAddress != 0){
-		tx_semaphore_put(&DHCPSemaphore);
-	}
-
-	return NX_SUCCESS;
-}
-
-
-
-
-/**------------------------------------------------------------------------------------------------
- * @brief  ip address change callback.
- * @param ip_instance: NX_IP instance
- * @param ptr: user data
- * @retval none
- */
-static VOID ip_address_change_notify_callback(NX_IP *ip_instance, VOID *ptr)
-{
-	/* release the semaphore as soon as an IP address is available */
-	tx_semaphore_put(&DHCPSemaphore);
-}
-
-/** ------------------------------------------------------------------------------------------------
- * @brief Main thread entry.
- * @param thread_input: ULONG user argument used by the thread entry
- * @retval none
- */
-static VOID nx_app_thread_entry (ULONG thread_input)
-{
-	// CREATE DHCP CLIENT
-	// DHCP_Enabled ならばDHCPによるアドレス解決を行う
-	// TODO 起動時のみのDHCPであり、DHCP経由でのアドレス変更は未対応
-	if ( DHCP_Enabled != 0 ){
-		// Create the DHCP client
-		if (NX_SUCCESS != ASSERT_ERROR("nx_dhcp_create",
-				nx_dhcp_create(&DHCPClient, &NetXDuoEthIpInstance, "DHCP Client"))){
-			return NX_DHCP_ERROR;
-		}
-		// set DHCP notification callback
-		tx_semaphore_create(&DHCPSemaphore, "DHCP Semaphore", 0);
-
-		// IP address change callbackを設定する
-		ASSERT_FATALERROR("nx_ip_address_change_notify",
-			nx_ip_address_change_notify(&NetXDuoEthIpInstance, ip_address_change_notify_callback, NULL));
-
-		// DHCPサーバーからのIP ADDRESS取得を開始
-		ASSERT_FATALERROR("nx_dhcp_start",
-			nx_dhcp_start(&DHCPClient));
-
-		// DHCPサーバーからのIP ADDRESS取得を待機
-		if (TX_SUCCESS != ASSERT_ERROR("tx_semaphore_get DHCP connection",
-			tx_semaphore_get(&DHCPSemaphore, NX_APP_DEFAULT_TIMEOUT))){
-			// DHCPサーバーからのIP ADDRESS取得に失敗した
-			if (NX_APP_DEFAULT_IP_ADDRESS == 0 || NX_APP_DEFAULT_NET_MASK == 0)
-				ERROR_HANDLER();
-			// NX_APP_DEFAULT_IP_ADDRESS が定義されていれば固定IPAddressとして設定
-			ASSERT_FATALERROR("nx_ip_address_set",
-				nx_ip_address_set(&NetXDuoEthIpInstance, NX_APP_DEFAULT_IP_ADDRESS, NX_APP_DEFAULT_NET_MASK));
-		}
-	}
-
-	/* USER CODE BEGIN Nx_App_Thread_Entry 2 */
-	ASSERT_FATALERROR("nx_ip_address_get",
-		nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask));
-	PRINT_IP_ADDRESS(IpAddress);
-
-#if HTTP_ENABLED
-	/* Call entry function to start iperf test.  */
-	nx_iperf_entry(&WebServerPool, &NetXDuoEthIpInstance, http_stack, HTTP_STACK_SIZE, iperf_stack, IPERF_STACK_SIZE);
-#endif
-	/* the network is correctly initialized, start the TCP server thread */
-	tx_thread_resume(&AppTCPThread);
-
-	/* if this thread is not needed any more, we relinquish it */
-	tx_thread_relinquish();
-}
 
 /** ------------------------------------------------------------------------------------------------
  * 
@@ -330,40 +98,22 @@ typedef struct TCPTask_Struct {
 	UINT volatile	Active;
 } TCPTask;
 
-typedef struct UDPTask_Struct {
-	TX_THREAD		Thread;
-	CHAR*			Name;
-	UCHAR 			*StackSpace;
-	ULONG 			StackSize;	// = NX_APP_THREAD_STACK_SIZE;
-	UINT			Priority;
-
-	NX_UDP_SOCKET 	Socket;		//
-	UINT			Port;		// DEFAULT_PORT
-	ULONG 			WindowSize;
-	NXD_ADDRESS		RemoteIP;
-	UINT			RemotePort;
-	ULONG			QueueMax;			// QUEUE_MAX_SIZE
-	NX_PACKET 		*rx_packet;
-	void (*RecieveCallback)(UCHAR* buffer, UINT buffer_length);
-	UINT volatile	Active;
-} UDPTask;
-
 TCPTask TcpControlTask = {
 	//Thread;
-	.Name 			= "TCP Control",
-	.StackSpace 	= NX_NULL,
-	.StackSize 		= NX_APP_THREAD_STACK_SIZE,
-	.Priority 		= 10,
+	.Name = "TCP Control",
+	.StackSpace 		= NX_NULL,
+	.StackSize 			= NX_APP_THREAD_STACK_SIZE,
+	.Priority 			= 10,
 
 	//NX_TCP_SOCKET	Socket;	// TcpSocket
-	.Port 			= 8001,				//
-	.WindowSize		= ASI_PACKET_SIZE,
+	.Port 				= 8001,				//
+	.WindowSize			= ASI_PACKET_SIZE,
 	//RemoteIP;
 	//RemotePort;
-	.QueueMax 		= 1,
-	.rx_packet 		= NX_NULL,
-	.RecieveCallback= NULL,
-	.Active 		= 0
+	.QueueMax 			= 1,
+	.rx_packet 			= NX_NULL,
+	.RecieveCallback 	= NULL,
+	.Active 			= 0
 };
 
 
@@ -385,7 +135,6 @@ void TcpServerThread_Cleanup(TCPTask* this)
     tx_thread_delete(&this->Thread);
 
     tx_byte_release(this->StackSpace);
-    this->StackSpace = NX_NULL;
 }
 
 static void TcpServerThread_Entry(ULONG thread_input);
@@ -416,43 +165,11 @@ UINT TcpServerThread_Create(TCPTask* this, UINT tx_start)
 }
 
 /** -----------------------------------------------------------------------------------------------
-* @brief  TCP socket recieve
-* @param  TCPTask *this
-* @retval none
-*/
-static VOID TcpSocketRecieve(TCPTask	*this){
-	this->Active = 1;
-	while (this->Active != 0){
-		UINT status = nx_tcp_socket_receive(&this->Socket, &this->rx_packet, 100);
-		if (status == NX_NO_PACKET)
-			continue;
-		if (status != NX_SUCCESS)
-			break;
-
-		ULONG data_length;
-		UCHAR data_buffer[this->WindowSize];
-		if (nx_packet_length_get(this->rx_packet, &data_length) != NX_SUCCESS)
-			printf("Invalid packet pointer\r\n");
-		else if (data_length > sizeof(data_buffer))
-			printf("Invalid packet length %lu\r\n", data_length);
-		else {
-			TX_MEMSET(data_buffer, '\0', sizeof(data_buffer));
-			nx_packet_data_retrieve(this->rx_packet, data_buffer, &data_length);
-			nxd_udp_source_extract(this->rx_packet, &this->RemoteIP, &this->RemotePort);
-		//	PRINT_IP_ADDRESS_PORT(source_ip_address, source_port);
-			if (this->RecieveCallback != NULL)
-				this->RecieveCallback(data_buffer, data_length);
-		}
-		nx_packet_release(this->rx_packet);
-	}
-}
-
-/** -----------------------------------------------------------------------------------------------
 * @brief  TCP thread entry.
 * @param thread_input: thread user data
 * @retval none
 */
-static VOID TcpServerThread_Entry(ULONG thread_input)
+static void TcpServerThread_Entry(ULONG thread_input)
 {
 	TCPTask	*this = (TCPTask*)thread_input;
     UINT	step = 0;
@@ -505,40 +222,68 @@ static VOID TcpServerThread_Entry(ULONG thread_input)
 * @retval none
 */
 static VOID TcpClientThread_Entry(ULONG thread_input){
-	TCPTask	*this = (TCPTask*)thread_input;
-    UINT	step;
-    do {
-    	step   = 0;	// TCP Socket Create
-		if (NX_SUCCESS != nx_tcp_socket_create(
-				&NetXDuoEthIpInstance,	// Pointer to previously created IP instance.
-				&this->Socket,
-				"TCP Client Socket",
-				NX_IP_NORMAL,
-				NX_FRAGMENT_OKAY,
-				NX_IP_TIME_TO_LIVE,
-				this->WindowSize, // window_size : 受信キューの最大バイト数
-				NX_NULL,		// urgent_data_callback
-				NX_NULL			// disconnect_callback
-			))
-			break;
-		step   = 1;	// bind the client socket for the DEFAULT_PORT
-		if (NX_SUCCESS != nx_tcp_client_socket_bind(&this->Socket, this->Port, NX_WAIT_FOREVER))
-			break;
-		step   = 2;	// connect to the remote server on the specified port
-		if (NX_SUCCESS != nxd_tcp_client_socket_connect(&this->Socket, &this->RemoteIP, this->RemotePort, NX_WAIT_FOREVER))
-			break;
-		TcpSocketRecieve(this);
-		nx_tcp_socket_disconnect(&this->Socket, 10);
-    } while(0);
+	TCPTask* 	this = (TCPTask*)thread_input;
+    UINT	status;
+//    ULONG	remote_ip_address;
+//    UINT	remote_port;
+//    NX_PACKET *rx_packet;
 
-    switch (step){
-		case 2:
-			nx_tcp_client_socket_unbind(&this->Socket);
-		case 1:
-			nx_tcp_socket_delete(&this->Socket);
-		case 0:
-			break;
+    // TCP Server Socket を作成する
+    // この機能は、指定された IP インスタンス用の TCP ソケットを作成します。
+    // このサービスにより、クライアントソケットとサーバソケットの両方が作成されます。
+    status =  nx_tcp_socket_create(
+    				&NetXDuoEthIpInstance,	// Pointer to previously created IP instance.
+					&this->Socket,
+					"TCP Server Socket",
+					NX_IP_NORMAL,
+					NX_FRAGMENT_OKAY,
+					NX_IP_TIME_TO_LIVE,
+					this->WindowSize, // window_size : 受信キューの最大バイト数
+					NX_NULL,		// urgent_data_callback
+					NX_NULL			// disconnect_callback
+				   );
+    if (status != NX_SUCCESS)
+        return;
+
+    // bind the client socket for the DEFAULT_PORT
+    status =  nx_tcp_client_socket_bind(&this->Socket, this->Port, NX_WAIT_FOREVER);
+    if (status != NX_SUCCESS)
+      	return;
+
+    /* connect to the remote server on the specified port */
+    status = nxd_tcp_client_socket_connect(&this->Socket, &this->RemoteIP, this->RemotePort, NX_WAIT_FOREVER);
+    if (status != NX_SUCCESS)
+      	return;
+
+//    remote_ip_address = this->Socket.nx_tcp_socket_connect_ip.nxd_ip_address.v4;
+//    remote_port       = this->Socket.nx_tcp_socket_connect_port;
+//    PRINT_IP_ADDRESS_PORT(remote_ip_address, remote_port);
+
+    this->Active = 1;
+    while (this->Active){
+        if ((status = nx_tcp_socket_receive(&this->Socket, &this->rx_packet, 100)) == NX_SUCCESS){
+			ULONG data_length;
+			UCHAR data_buffer[ASI_PACKET_SIZE];
+			if (nx_packet_length_get(this->rx_packet, &data_length) != NX_SUCCESS)
+				printf("Invalid packet pointer\r\n");
+			else if (data_length > sizeof(data_buffer))
+				printf("Invalid packet length %lu\r\n", data_length);
+			else {
+				TX_MEMSET(data_buffer, '\0', sizeof(data_buffer));
+				nx_packet_data_retrieve(this->rx_packet, data_buffer, &data_length);
+				nxd_udp_source_extract(this->rx_packet, &this->RemoteIP, &this->RemotePort);
+			//	PRINT_IP_ADDRESS_PORT(source_ip_address, source_port);
+				if (this->RecieveCallback != NULL)
+					this->RecieveCallback(data_buffer, data_length);
+			}
+        }
+        else if (status != NX_NO_PACKET)
+          break;
     }
+	nx_packet_release(this->rx_packet);
+    nx_tcp_socket_disconnect(&this->Socket, 10);
+    nx_tcp_client_socket_unbind(&this->Socket);
+    nx_tcp_socket_delete(&this->Socket);
 }
 
 /** ------------------------------------------------------------------------------------------------

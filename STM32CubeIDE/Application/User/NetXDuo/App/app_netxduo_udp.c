@@ -350,20 +350,20 @@ typedef struct UDPTask_Struct {
 
 TCPTask TcpControlTask = {
 	//Thread;
-	.Name 			= "TCP Control",
-	.StackSpace 	= NX_NULL,
-	.StackSize 		= NX_APP_THREAD_STACK_SIZE,
-	.Priority 		= 10,
+	.Name = "TCP Control",
+	.StackSpace 		= NX_NULL,
+	.StackSize 			= NX_APP_THREAD_STACK_SIZE,
+	.Priority 			= 10,
 
 	//NX_TCP_SOCKET	Socket;	// TcpSocket
-	.Port 			= 8001,				//
-	.WindowSize		= ASI_PACKET_SIZE,
+	.Port 				= 8001,				//
+	.WindowSize			= ASI_PACKET_SIZE,
 	//RemoteIP;
 	//RemotePort;
-	.QueueMax 		= 1,
-	.rx_packet 		= NX_NULL,
-	.RecieveCallback= NULL,
-	.Active 		= 0
+	.QueueMax 			= 1,
+	.rx_packet 			= NX_NULL,
+	.RecieveCallback 	= NULL,
+	.Active 			= 0
 };
 
 
@@ -385,7 +385,6 @@ void TcpServerThread_Cleanup(TCPTask* this)
     tx_thread_delete(&this->Thread);
 
     tx_byte_release(this->StackSpace);
-    this->StackSpace = NX_NULL;
 }
 
 static void TcpServerThread_Entry(ULONG thread_input);
@@ -416,87 +415,95 @@ UINT TcpServerThread_Create(TCPTask* this, UINT tx_start)
 }
 
 /** -----------------------------------------------------------------------------------------------
-* @brief  TCP socket recieve
-* @param  TCPTask *this
-* @retval none
-*/
-static VOID TcpSocketRecieve(TCPTask	*this){
-	this->Active = 1;
-	while (this->Active != 0){
-		UINT status = nx_tcp_socket_receive(&this->Socket, &this->rx_packet, 100);
-		if (status == NX_NO_PACKET)
-			continue;
-		if (status != NX_SUCCESS)
-			break;
-
-		ULONG data_length;
-		UCHAR data_buffer[this->WindowSize];
-		if (nx_packet_length_get(this->rx_packet, &data_length) != NX_SUCCESS)
-			printf("Invalid packet pointer\r\n");
-		else if (data_length > sizeof(data_buffer))
-			printf("Invalid packet length %lu\r\n", data_length);
-		else {
-			TX_MEMSET(data_buffer, '\0', sizeof(data_buffer));
-			nx_packet_data_retrieve(this->rx_packet, data_buffer, &data_length);
-			nxd_udp_source_extract(this->rx_packet, &this->RemoteIP, &this->RemotePort);
-		//	PRINT_IP_ADDRESS_PORT(source_ip_address, source_port);
-			if (this->RecieveCallback != NULL)
-				this->RecieveCallback(data_buffer, data_length);
-		}
-		nx_packet_release(this->rx_packet);
-	}
-}
-
-/** -----------------------------------------------------------------------------------------------
 * @brief  TCP thread entry.
 * @param thread_input: thread user data
 * @retval none
 */
-static VOID TcpServerThread_Entry(ULONG thread_input)
+static void TcpServerThread_Entry(ULONG thread_input)
 {
-	TCPTask	*this = (TCPTask*)thread_input;
-    UINT	step = 0;
-	do {
-		ULONG actual_status;
-		// Check status of an IP instance
-		if (NX_SUCCESS != nx_ip_status_check(&NetXDuoEthIpInstance, NX_IP_INITIALIZE_DONE, &actual_status, NX_IP_PERIODIC_RATE))
-			break;
-		// TCP Server Socket を作成する
-		if (NX_SUCCESS != nx_tcp_socket_create(
-				&NetXDuoEthIpInstance,	// Pointer to previously created IP instance.
-				&this->Socket,
-				"TCP Server Socket",
-				NX_IP_NORMAL,
-				NX_FRAGMENT_OKAY,
-				NX_IP_TIME_TO_LIVE,
-				this->WindowSize, // window_size : 受信キューの最大バイト数
-				NX_NULL,		// urgent_data_callback
-				NX_NULL			// disconnect_callback
-			))
-			break;
-		step	= 1; // 指定TCPポートに対するリッスン要求を登録
-		if (NX_SUCCESS != nx_tcp_server_socket_listen(&NetXDuoEthIpInstance, this->Port, &this->Socket, this->QueueMax, NX_NULL))
-			break;
-		step	= 2; // Client接続リクエストを受信
-		if (NX_SUCCESS != nx_tcp_server_socket_accept(&this->Socket, NX_WAIT_FOREVER))
-			break;
-		// 接続したピアIPアドレスとポート番号を取得
-		if (NX_SUCCESS != nxd_tcp_socket_peer_info_get(&this->Socket, &this->RemoteIP, &this->RemotePort))
-			break;
-		// TCP受信処理
-		TcpSocketRecieve(this);
-		nx_tcp_socket_disconnect(&this->Socket, 10);
-	} while(0);
+	TCPTask* 	this = (TCPTask*)thread_input;
+	UINT        status;
+	ULONG       actual_status;
 
-    switch (step){
-		case 2:
-			nx_tcp_server_socket_unaccept(&this->Socket);
-		    nx_tcp_server_socket_unlisten(&NetXDuoEthIpInstance, this->Port);
-		case 1:
-			nx_tcp_socket_delete(&this->Socket);
-		case 0:
-			break;
+    // IPインスタンスが初期化されていることを確認します。
+    // この機能は、必要な条件を満たすスレッドスリープを使用して、指定されたインターフェースのリンク状態をポーリングします。
+    // 要求されたステータスがIPインスタンスにのみ存在する場合、例えばNX_IP_INITIALIZE_DONEの場合、このサービスは、そのステータスに対するIP設定を提供します。
+    status =  nx_ip_status_check(&NetXDuoEthIpInstance, NX_IP_INITIALIZE_DONE, &actual_status, NX_IP_PERIODIC_RATE);
+    if (status != NX_SUCCESS){
+        return;
     }
+
+    // TCP Server Socket を作成する
+    // この機能は、指定された IP インスタンス用の TCP ソケットを作成します。
+    // このサービスにより、クライアントソケットとサーバソケットの両方が作成されます。
+    status =  nx_tcp_socket_create(
+    				&NetXDuoEthIpInstance,	// Pointer to previously created IP instance.
+					&this->Socket,
+					"TCP Server Socket",
+					NX_IP_NORMAL,
+					NX_FRAGMENT_OKAY,
+					NX_IP_TIME_TO_LIVE,
+					this->WindowSize, // window_size : 受信キューの最大バイト数
+					NX_NULL,		// urgent_data_callback
+					NX_NULL			// disconnect_callback
+				   );
+    if (status){
+        return;
+    }
+
+    // Setup this thread to listen.
+    // 指定した TCP ポートに対するリッスン要求とサーバソケットを登録します。
+    status =  nx_tcp_server_socket_listen(&NetXDuoEthIpInstance, this->Port, &this->Socket, this->QueueMax, NX_NULL);
+    if (status){
+        nx_tcp_socket_delete(&this->Socket);
+        return;
+    }
+
+    // この関数は、アクティブなClient接続リクエストを受信した後にサーバーソケットを設定します。
+    status =  nx_tcp_server_socket_accept(&this->Socket, NX_WAIT_FOREVER);
+    if (status){
+        nx_tcp_server_socket_unlisten(&NetXDuoEthIpInstance, this->Port);
+        nx_tcp_socket_delete(&this->Socket);
+        return;
+    }
+
+    // この関数は、指定された TCP ソケットに接続されているピアの IP アドレスとポート番号を取得します。
+    status = nxd_tcp_socket_peer_info_get(&this->Socket, &this->RemoteIP, &this->RemotePort);
+    if (status){
+        nx_tcp_server_socket_unaccept(&this->Socket);
+        nx_tcp_server_socket_unlisten(&NetXDuoEthIpInstance, this->Port);
+        nx_tcp_socket_delete(&this->Socket);
+        return;
+    }
+
+    // TCP受信処理
+    this->Active = 1;
+    while (this->Active){
+        /* Receive a TCP message from the socket.  */
+        status =  nx_tcp_socket_receive(&this->Socket, &this->rx_packet, NX_WAIT_FOREVER);
+        if (status){
+            break;
+        }
+
+        /* Release the packet.  */
+        nx_packet_release(this->rx_packet);
+    }
+
+    /* Disconnect the server socket.  */
+    status =  nx_tcp_socket_disconnect(&this->Socket, 10);
+    if (status){
+        //error_counter++;
+    }
+
+    /* Unaccept the server socket.  */
+    status =  nx_tcp_server_socket_unaccept(&this->Socket);
+    status += nx_tcp_server_socket_unlisten(&NetXDuoEthIpInstance, this->Port);
+    if (status){
+        //error_counter++;
+    }
+
+    /* Delete the socket.  */
+    nx_tcp_socket_delete(&this->Socket);
 }
 
 /** -----------------------------------------------------------------------------------------------
@@ -505,40 +512,68 @@ static VOID TcpServerThread_Entry(ULONG thread_input)
 * @retval none
 */
 static VOID TcpClientThread_Entry(ULONG thread_input){
-	TCPTask	*this = (TCPTask*)thread_input;
-    UINT	step;
-    do {
-    	step   = 0;	// TCP Socket Create
-		if (NX_SUCCESS != nx_tcp_socket_create(
-				&NetXDuoEthIpInstance,	// Pointer to previously created IP instance.
-				&this->Socket,
-				"TCP Client Socket",
-				NX_IP_NORMAL,
-				NX_FRAGMENT_OKAY,
-				NX_IP_TIME_TO_LIVE,
-				this->WindowSize, // window_size : 受信キューの最大バイト数
-				NX_NULL,		// urgent_data_callback
-				NX_NULL			// disconnect_callback
-			))
-			break;
-		step   = 1;	// bind the client socket for the DEFAULT_PORT
-		if (NX_SUCCESS != nx_tcp_client_socket_bind(&this->Socket, this->Port, NX_WAIT_FOREVER))
-			break;
-		step   = 2;	// connect to the remote server on the specified port
-		if (NX_SUCCESS != nxd_tcp_client_socket_connect(&this->Socket, &this->RemoteIP, this->RemotePort, NX_WAIT_FOREVER))
-			break;
-		TcpSocketRecieve(this);
-		nx_tcp_socket_disconnect(&this->Socket, 10);
-    } while(0);
+	TCPTask* 	this = (TCPTask*)thread_input;
+    UINT	status;
+//    ULONG	remote_ip_address;
+//    UINT	remote_port;
+//    NX_PACKET *rx_packet;
 
-    switch (step){
-		case 2:
-			nx_tcp_client_socket_unbind(&this->Socket);
-		case 1:
-			nx_tcp_socket_delete(&this->Socket);
-		case 0:
-			break;
+    // TCP Server Socket を作成する
+    // この機能は、指定された IP インスタンス用の TCP ソケットを作成します。
+    // このサービスにより、クライアントソケットとサーバソケットの両方が作成されます。
+    status =  nx_tcp_socket_create(
+    				&NetXDuoEthIpInstance,	// Pointer to previously created IP instance.
+					&this->Socket,
+					"TCP Server Socket",
+					NX_IP_NORMAL,
+					NX_FRAGMENT_OKAY,
+					NX_IP_TIME_TO_LIVE,
+					this->WindowSize, // window_size : 受信キューの最大バイト数
+					NX_NULL,		// urgent_data_callback
+					NX_NULL			// disconnect_callback
+				   );
+    if (status != NX_SUCCESS)
+        return;
+
+    // bind the client socket for the DEFAULT_PORT
+    status =  nx_tcp_client_socket_bind(&this->Socket, this->Port, NX_WAIT_FOREVER);
+    if (status != NX_SUCCESS)
+      	return;
+
+    /* connect to the remote server on the specified port */
+    status = nxd_tcp_client_socket_connect(&this->Socket, &this->RemoteIP, this->RemotePort, NX_WAIT_FOREVER);
+    if (status != NX_SUCCESS)
+      	return;
+
+//    remote_ip_address = this->Socket.nx_tcp_socket_connect_ip.nxd_ip_address.v4;
+//    remote_port       = this->Socket.nx_tcp_socket_connect_port;
+//    PRINT_IP_ADDRESS_PORT(remote_ip_address, remote_port);
+
+    this->Active = 1;
+    while (this->Active){
+        if ((status = nx_tcp_socket_receive(&this->Socket, &this->rx_packet, 100)) == NX_SUCCESS){
+			ULONG data_length;
+			UCHAR data_buffer[ASI_PACKET_SIZE];
+			if (nx_packet_length_get(this->rx_packet, &data_length) != NX_SUCCESS)
+				printf("Invalid packet pointer\r\n");
+			else if (data_length > sizeof(data_buffer))
+				printf("Invalid packet length %lu\r\n", data_length);
+			else {
+				TX_MEMSET(data_buffer, '\0', sizeof(data_buffer));
+				nx_packet_data_retrieve(this->rx_packet, data_buffer, &data_length);
+				nxd_udp_source_extract(this->rx_packet, &this->RemoteIP, &this->RemotePort);
+			//	PRINT_IP_ADDRESS_PORT(source_ip_address, source_port);
+				if (this->RecieveCallback != NULL)
+					this->RecieveCallback(data_buffer, data_length);
+			}
+        }
+        else if (status != NX_NO_PACKET)
+          break;
     }
+	nx_packet_release(this->rx_packet);
+    nx_tcp_socket_disconnect(&this->Socket, 10);
+    nx_tcp_client_socket_unbind(&this->Socket);
+    nx_tcp_socket_delete(&this->Socket);
 }
 
 /** ------------------------------------------------------------------------------------------------
