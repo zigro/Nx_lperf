@@ -35,6 +35,11 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>Afx</name>
+			<type>2</type>
+			<location>D:/Works/STM32H563/Examples/Nx_Iperf/Afx</location>
+		</link>
+		<link>
 			<name>Nx_Iperf.ioc</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Nx_Iperf.ioc</locationURI>
@@ -4618,6 +4623,11 @@
 			<name>Application/User/FileX/App/app_filex.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/FileX/App/app_filex.c</locationURI>
+		</link>
+		<link>
+			<name>Application/User/NetXDuo/App/app_netxduo.c</name>
+			<type>1</type>
+			<location>D:/Works/STM32H563/Examples/Nx_Iperf/STM32CubeIDE/Application/User/NetXDuo/App/app_netxduo.c</location>
 		</link>
 	</linkedResources>
 </projectDescription>
