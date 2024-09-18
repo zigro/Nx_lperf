@@ -38,14 +38,38 @@ extern "C" {
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
+typedef struct TCP_TASK_Struct {
+	TX_THREAD		Thread;
+//	CHAR*			Name;
+	UCHAR 			*StackSpace;
+	ULONG 			StackSize;	// = NX_APP_THREAD_STACK_SIZE;
+//	UINT			Priority;
 
-/* USER CODE END ET */
+	NX_TCP_SOCKET	Socket;	// TcpSocket
+	UINT 			Port;				//
+	ULONG 			WindowSize;
+	NXD_ADDRESS		RemoteIP;
+	UINT			RemotePort;
+	ULONG			QueueMax;			// QUEUE_MAX_SIZE
+//	NX_PACKET 		*rx_packet;
+	UINT 			(*RecieveCallback)(struct TCP_TASK_Struct* this, UCHAR* buffer, ULONG buffer_length);
+	void 			(*CleanUp)(struct TCP_TASK_Struct* this);
+	UINT 			(*SendPacket)(struct TCP_TASK_Struct* this, UCHAR* buffer, ULONG buffer_length);
+	TX_SEMAPHORE	TxSemaphore;
+	UINT volatile	Active;
+} TCP_TASK;
+
+/* External variables ---------------------------------------------------------*/
+extern NX_IP					NetXDuoEthIpInstance;
+extern TX_BYTE_POOL 			*TxBytePool;
+extern NX_PACKET_POOL			NxPacketPool;
 
 /* Exported constants --------------------------------------------------------*/
-/* USER CODE BEGIN EC */
+#define PERIODIC_MSEC(msec)		(ULONG)((msec)*NX_IP_PERIODIC_RATE/1000)
+#define SEND_TIMEOUT			PERIODIC_MSEC(3000)
+#define RECIEVE_TIMEOUT			PERIODIC_MSEC(1000)
+#define DISCONNECT_WAIT			PERIODIC_MSEC(5000)
 
-/* USER CODE END EC */
 /* The DEFAULT_PAYLOAD_SIZE should match with RxBuffLen configured via MX_ETH_Init */
 #ifndef DEFAULT_PAYLOAD_SIZE
 #define DEFAULT_PAYLOAD_SIZE      1536
@@ -87,12 +111,15 @@ extern "C" {
 UINT MX_NetXDuo_Init(VOID *memory_ptr);
 
 /* USER CODE BEGIN EFP */
-
+UINT TcpServerThread_Create(TCP_TASK* this, UINT port, CHAR* name, UINT tx_start, UINT priority);
+UINT TcpClientThread_Create(TCP_TASK* this, ULONG remote_ip_address, UINT remote_port,
+		CHAR* name, UINT tx_start, UINT priority);
+VOID TcpThread_Resume(TCP_TASK *this);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define 				ASI_PACKET_SIZE				(256+7)
+#define 				ASI_PACKET_SIZE				(256 + 7)
 #define 				ASI_PACKET_MSS				(((ASI_PACKET_SIZE + 1)>>1)<<1)
 #define 				ASI_PACKET_PAYLOADSIZE		(ASI_PACKET_MSS + 80)
 

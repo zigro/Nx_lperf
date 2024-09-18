@@ -619,22 +619,22 @@
 #define NX_TCP_TRANSMIT_TIMER_RATE  			1
 */
 
-/* Specifies the number of seconds of inactivity before the keepalive timer
-   activates. The default value is 7200, which represents 2 hours, and is
-   defined in nx_tcp.h. The application can override the default by defining
-   the value before nx_api.h is included. */
-/*
-#define NX_TCP_KEEPALIVE_INITIAL    			7200
+/* キープアライブタイマーが起動するまでの非アクティブ状態の秒数を指定します。
+   デフォルト値は7200(2時間)で、nx_tcp.hで定義されています。
+   アプリケーションは、nx_api.hがインクルードされる前に値を定義することで、
+   デフォルト値を上書きすることができます。
 */
+#define NX_TCP_KEEPALIVE_INITIAL    			120
 
-/* Specifies the number of seconds between retries of the keepalive timer
-   assuming the other side of the connection is not responding. The default
-   value is 75, which represents 75 seconds between retries, and is defined
-   in nx_tcp.h. The application can override the default by defining the value
-   before nx_api.h is included. */
-/*
-#define NX_TCP_KEEPALIVE_RETRY      			75
+
+/* 接続相手側が応答しない場合の、キープアライブタイマーの再試行間隔(秒)を指定
+   します。
+   デフォルト値は75で、これは再試行間隔が75秒であることを意味し、nx_tcp.hで
+   定義されています。アプリケーションは、nx_api.hがインクルードされる前に値を
+   定義することで、デフォルト値を上書きすることができます。
 */
+#define NX_TCP_KEEPALIVE_RETRY      			20
+
 
 /* Symbol that defines the maximum number of out-of-order TCP packets can be
    kept in the TCP socket receive queue. This symbol can be used to limit the
@@ -646,9 +646,9 @@
 
 /* Defined, enables the optional TCP keepalive timer. The default settings is
    not enabled. */
-/*
+
 #define NX_ENABLE_TCP_KEEPALIVE
-*/
+
 
 /* Defined, enables the optional TCP immediate ACK response processing.
    Defining this symbol is equivalent to defining NX_TCP_ACK_EVERY_N_PACKETS
@@ -704,9 +704,9 @@
    deemed broken. The default value is 10, which represents 10 retries, and is
    defined in nx_tcp.h. The application can override the default by defining
    the value before nx_api.h is included. */
-/*
-#define NX_TCP_KEEPALIVE_RETRIES    			10
-*/
+
+#define NX_TCP_KEEPALIVE_RETRIES    			3
+
 
 /* Enables the window scaling option for TCP applications. If defined, window
    scaling option is negotiated during TCP connection phase, and the

@@ -77,11 +77,11 @@
 							</tool>
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.1602233047" name="MCU GCC Linker" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker">
 								<option id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script.1087226000" name="Linker Script (-T)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.script" value="${workspace_loc:/${ProjName}/STM32H563ZITX_FLASH.ld}" valueType="string"/>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.directories.686070211" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.directories" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;D:\Works\STM32H563\Examples\STM32H5xxDrivers\STM32CubeIDE\Debug&quot;"/>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.directories.686070211" name="ライブラリー検索パス (-L)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.directories" valueType="libPaths">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/STM32H5xxDrivers/Debug}&quot;"/>
 								</option>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.libraries.1111353972" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.libraries" valueType="libs">
-									<listOptionValue builtIn="false" value="STM32H5xxDrivers"/>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.libraries.1111353972" name="ライブラリー (-l)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.option.libraries" valueType="libs">
+									<listOptionValue builtIn="false" value=":libSTM32H5xxDrivers.elf"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.input.1744604881" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
@@ -100,7 +100,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Middlewares|Drivers|Application/User/NetXDuo/App/nx_iperf_udp_tx.c|Application/User/NetXDuo/App/nx_iperf_udp_rx.c|Application/User/NetXDuo/App/nx_iperf_tcp_tx.c|Application/User/NetXDuo/App/nx_iperf_tcp_rx.c|Application/User/NetXDuo/App/app_netxduo_udp_server.c|Application/User/NetXDuo/App/app_netxduo_udp_client.c|Application/User/NetXDuo/App/app_netxduo_tcp_server.c|Application/User/NetXDuo/App/app_netxduo_tcp_client.c|Application/User/Core/httpdemo.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="Application/User/NetXDuo/App/app_netxduo_udp.c|Middlewares|Drivers|Application/User/NetXDuo/App/nx_iperf_udp_tx.c|Application/User/NetXDuo/App/nx_iperf_udp_rx.c|Application/User/NetXDuo/App/nx_iperf_tcp_tx.c|Application/User/NetXDuo/App/nx_iperf_tcp_rx.c|Application/User/NetXDuo/App/app_netxduo_udp_server.c|Application/User/NetXDuo/App/app_netxduo_udp_client.c|Application/User/NetXDuo/App/app_netxduo_tcp_server.c|Application/User/NetXDuo/App/app_netxduo_tcp_client.c|Application/User/Core/httpdemo.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -196,7 +196,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Middlewares|Drivers|Application/User/NetXDuo/App/nx_iperf_udp_tx.c|Application/User/NetXDuo/App/nx_iperf_udp_rx.c|Application/User/NetXDuo/App/nx_iperf_tcp_tx.c|Application/User/NetXDuo/App/nx_iperf_tcp_rx.c|Application/User/NetXDuo/App/app_netxduo_udp_server.c|Application/User/NetXDuo/App/app_netxduo_udp_client.c|Application/User/NetXDuo/App/app_netxduo_tcp_server.c|Application/User/NetXDuo/App/app_netxduo_tcp_client.c|Application/User/Core/httpdemo.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="Application/User/NetXDuo/App/app_netxduo_udp.c|Middlewares|Drivers|Application/User/NetXDuo/App/nx_iperf_udp_tx.c|Application/User/NetXDuo/App/nx_iperf_udp_rx.c|Application/User/NetXDuo/App/nx_iperf_tcp_tx.c|Application/User/NetXDuo/App/nx_iperf_tcp_rx.c|Application/User/NetXDuo/App/app_netxduo_udp_server.c|Application/User/NetXDuo/App/app_netxduo_udp_client.c|Application/User/NetXDuo/App/app_netxduo_tcp_server.c|Application/User/NetXDuo/App/app_netxduo_tcp_client.c|Application/User/Core/httpdemo.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
