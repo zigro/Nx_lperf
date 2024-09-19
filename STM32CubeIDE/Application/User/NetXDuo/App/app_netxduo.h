@@ -45,18 +45,20 @@ typedef struct TCP_TASK_Struct {
 	ULONG 			StackSize;	// = NX_APP_THREAD_STACK_SIZE;
 //	UINT			Priority;
 
-	NX_TCP_SOCKET	Socket;	// TcpSocket
+	UINT volatile	Active;
 	UINT 			Port;				//
 	ULONG 			WindowSize;
 	NXD_ADDRESS		RemoteIP;
 	UINT			RemotePort;
 	ULONG			QueueMax;			// QUEUE_MAX_SIZE
-//	NX_PACKET 		*rx_packet;
-	UINT 			(*RecieveCallback)(struct TCP_TASK_Struct* this, UCHAR* buffer, ULONG buffer_length);
+	UINT 			(*RecieveCallback)(struct TCP_TASK_Struct* this, const UCHAR *buffer, UINT buffer_length);
 	void 			(*CleanUp)(struct TCP_TASK_Struct* this);
-	UINT 			(*SendPacket)(struct TCP_TASK_Struct* this, UCHAR* buffer, ULONG buffer_length);
+	UINT 			(*SendPacket)(struct TCP_TASK_Struct* this, const UCHAR *buffer, UINT buffer_length);
+	UINT 			(*SendMessage)(struct TCP_TASK_Struct* this, const UCHAR *buffer, UINT buffer_length);
+	TX_THREAD		*SendThread;
 	TX_SEMAPHORE	TxSemaphore;
-	UINT volatile	Active;
+	UINT			SendWaitTicks;	// 送信待機Ticks NX_NO_WAIT(0)を指定すると即時送信する
+	NX_TCP_SOCKET	Socket;	// TcpSocket
 } TCP_TASK;
 
 /* External variables ---------------------------------------------------------*/

@@ -141,6 +141,14 @@ static VOID nx_app_thread_entry (ULONG thread_input);
 static VOID App_Link_Thread_Entry(ULONG thread_input);
 /* USER CODE END PFP */
 
+// printfの出力のインターセプト関数
+int __write_message(unsigned char const *ptr, int len){
+	if (!TcpManagement.Active)
+		return -1;
+	if (TcpManagement.SendMessage(&TcpManagement, ptr, len) != NX_SUCCESS)
+		return -1;
+	return len;
+}
 
 /**
  * @brief  Application NetXDuo Initialization.
@@ -322,6 +330,34 @@ static VOID ip_address_change_notify_callback(NX_IP *ip_instance, VOID *ptr)
 	/* release the semaphore as soon as an IP address is available */
 	tx_semaphore_put(&DHCPSemaphore);
 }
+/** -------------------------------------------------------------------------------------------------------------------
+ *	TcpSocket_SendMessage
+ *	ASIメッセージプロトコルを送信する
+*/
+TCP_TASK dummy;
+static UINT dummy_RecieveCallback(TCP_TASK *this, const UCHAR *data_buffer, UINT data_length){
+	static int count = 0;
+	switch (++count){
+	case 1:
+		TcpClientThread_Create(&dummy, IP_ADDRESS(172,16,50,35), 2001, "TCP Client", TX_AUTO_START, 10);
+		dummy.SendMessage(&dummy,(UCHAR*)"クライアントの接続に成功しました", 32);
+		LogMsg(MSG_LEVEL_MESSAGE, "TCPクライアントの遠隔起動に成功しました");
+		break;
+	case 2:
+		dummy.SendMessage(&dummy,(UCHAR*)"クライアント接続を停止します", 28);
+		dummy.CleanUp(&dummy);
+		LogMsg(MSG_LEVEL_MESSAGE, "TCPクライアントを強制停止しました",0);
+		break;
+	case 3:
+		LogMsg(MSG_LEVEL_MESSAGE, "ちょっと待ってください",0);
+		break;
+	case 4:
+		LogMsg(MSG_LEVEL_MESSAGE, "もうすぐです",0);
+		count = 0;
+		break;
+	}
+	return NX_SUCCESS;
+}
 
 /** ------------------------------------------------------------------------------------------------
  * @brief Main thread entry.
@@ -373,6 +409,16 @@ static VOID nx_app_thread_entry (ULONG thread_input)
 #endif
 	/* the network is correctly initialized, start the TCP server thread */
 	TcpThread_Resume(&TcpManagement);
+	TcpManagement.RecieveCallback = dummy_RecieveCallback;
+
+	UINT count = 0;
+	//while(1)
+	{
+		tx_thread_sleep(500);
+		for (int n = 20; n > 0; --n){
+			LogMsg(MSG_LEVEL_MESSAGE, "app_thread_entry count=%u", ++count);
+		}
+	}
 
 	/* if this thread is not needed any more, we relinquish it */
 	tx_thread_relinquish();

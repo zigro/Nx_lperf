@@ -52,7 +52,7 @@ static UINT TcpSocket_Recieve(TCP_TASK *this){
 		//	nxd_udp_source_extract(rx_packet, &this->RemoteIP, &this->RemotePort);
 		//	PRINT_IP_ADDRESS_PORT(source_ip_address, source_port);
 			if (this->RecieveCallback != NULL)
-				this->RecieveCallback(this, data_buffer, data_length);
+				this->RecieveCallback(this, data_buffer, (UINT)data_length);
 		}
 		nx_packet_release(rx_packet);
 	}
@@ -61,42 +61,130 @@ static UINT TcpSocket_Recieve(TCP_TASK *this){
 	return nx_status;
 }
 
-//  -------------------------------------------------------------------------------------------------------------------
-//  TCPソケット送信
-static UINT TcpSocket_Send(TCP_TASK *this, UCHAR *data_buffer, ULONG data_length){
+/**	-------------------------------------------------------------------------------------------------------------------
+ *  _TcpSocket_Send_Check
+ *  送信可能かどうかをチェックする
+*/
+static UINT _TcpSocket_Send_Check(TCP_TASK *this){
 	UINT nx_status;
 	ULONG socket_state;
-    NX_PACKET *tx_packet;
 
     // スレッドの生存確認
-    if (this->Active == 0)
-    	return NX_NOT_CONNECTED;
-
-    // ソケットが接続されているかどうかをチェック
-    nx_status = nx_tcp_socket_info_get(&this->Socket, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &socket_state, NULL, NULL, NULL);
-    if (nx_status != NX_SUCCESS) return nx_status;
-
-    // if the connections is not established
-    if (socket_state != NX_TCP_ESTABLISHED){
-        return NX_NOT_CONNECTED;
-    }
-	nx_status = nx_packet_allocate(&NxPacketPool, &tx_packet, NX_UDP_PACKET, TX_WAIT_FOREVER);
+    if (this->Active == NX_FALSE) return NX_NOT_CONNECTED;
+	// ソケットが接続されているかどうかをチェック
+	nx_status = nx_tcp_socket_info_get(&this->Socket, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &socket_state, NULL, NULL, NULL);
 	if (nx_status != NX_SUCCESS) return nx_status;
-
-	do {
-		/* append the message to send into the packet */
-		nx_status = nx_packet_data_append(tx_packet, (VOID*)data_buffer, data_length, &NxPacketPool, TX_WAIT_FOREVER);
-		if (nx_status != NX_SUCCESS) break;
-
-		if (tx_semaphore_get(&this->TxSemaphore, SEND_TIMEOUT) == TX_SUCCESS){
-			/* send the packet over the TCP socket */
-			nx_status = nx_tcp_socket_send(&this->Socket, tx_packet, NX_NO_WAIT);
-			tx_semaphore_put(&this->TxSemaphore);
-		}
-	}while(0);
-	nx_packet_release(tx_packet);
+	// if the connections is not established
+	if (socket_state != NX_TCP_ESTABLISHED) return NX_NOT_CONNECTED;
+    // 送信スレッド内で再度呼び出された
+    if (this->SendThread == &this->Thread) return NX_CALLER_ERROR;
+    return NX_SUCCESS;
+}
+/**	-------------------------------------------------------------------------------------------------------------------
+ *  _TcpSocket_Send
+ *  排他制御 ソケット送信処理
+*/
+static UINT _TcpSocket_Send(TCP_TASK *this, NX_PACKET *tx_packet){
+	UINT nx_status = tx_semaphore_get(&this->TxSemaphore, SEND_TIMEOUT);
+	if (nx_status == TX_SUCCESS){
+		/* send the packet over the TCP socket */
+		nx_status = nx_tcp_socket_send(&this->Socket, tx_packet, this->SendWaitTicks);
+		tx_semaphore_put(&this->TxSemaphore);
+	}
 	return nx_status;
 }
+
+/**	-------------------------------------------------------------------------------------------------------------------
+ *  TcpSocket_Send
+ *  ソケット送信処理
+*/
+static UINT TcpSocket_Send(TCP_TASK *this, const UCHAR *data_buffer, UINT data_length){
+	UINT nx_status;
+    NX_PACKET *tx_packet = NX_NULL;
+
+	nx_status = _TcpSocket_Send_Check(this);
+	if (nx_status != NX_SUCCESS)
+		return nx_status;
+    this->SendThread = &this->Thread;
+	do {
+		nx_status = nx_packet_allocate(&NxPacketPool, &tx_packet, NX_TCP_PACKET, TX_WAIT_FOREVER);
+		if (nx_status != NX_SUCCESS)
+			break;
+		/* append the message to send into the packet */
+		nx_status = nx_packet_data_append(tx_packet, (VOID*)data_buffer, data_length, &NxPacketPool, TX_WAIT_FOREVER);
+		if (nx_status != NX_SUCCESS)
+			break;
+		nx_status = _TcpSocket_Send(this, tx_packet);
+	}while(0);
+	if (tx_packet != NX_NULL)
+		nx_packet_release(tx_packet);
+	this->SendThread = NX_NULL;
+	return nx_status;
+}
+
+/** -------------------------------------------------------------------------------------------------------------------
+ *	_TcpSocket_BuildAsiMessagePacket
+ *	ASIメッセージプロトコル用パケットの作成
+*/
+static UINT _TcpSocket_BuildAsiMessagePacket(NX_PACKET *tx_packet, const UCHAR *data_buffer, UINT data_length, NX_PACKET_POOL* pool, ULONG wait){
+	#define AsiCommandMessage	 0x20
+	UCHAR AsiPacketHeadder[] = { 0x02, 0x00, AsiCommandMessage, data_length & 0xff };
+	UCHAR AsiPacketFooter[] = { 0x03, 0x00, 0x0d };
+	UINT nx_status;
+	UCHAR check_sum = 0x00;
+
+	/* append the message to send into the packet */
+	nx_status = nx_packet_data_append(tx_packet, (VOID*)AsiPacketHeadder, sizeof(AsiPacketHeadder), pool, wait);
+	if (nx_status != NX_SUCCESS) return nx_status;
+
+	for (int i = 0; i < sizeof(AsiPacketHeadder); ++i)
+		check_sum += AsiPacketHeadder[i];
+
+	/* append the message to send into the packet */
+	nx_status = nx_packet_data_append(tx_packet, (VOID*)data_buffer, data_length, pool, wait);
+	if (nx_status != NX_SUCCESS) return nx_status;
+
+	for (int i = 0; i < data_length; ++i)
+		check_sum += data_buffer[i];
+	check_sum += AsiPacketFooter[0];
+	AsiPacketFooter[1] = check_sum;
+
+	/* append the message to send into the packet */
+	nx_status = nx_packet_data_append(tx_packet, (VOID*)AsiPacketFooter, sizeof(AsiPacketFooter), pool, wait);
+	return nx_status;
+}
+
+/** -------------------------------------------------------------------------------------------------------------------
+ *	TcpSocket_SendMessage
+ *	ASIメッセージプロトコルを送信する
+*/
+static UINT TcpSocket_SendMessage(TCP_TASK *this, const UCHAR *message, UINT message_length){
+	UINT nx_status;
+    NX_PACKET *tx_packet = NX_NULL;
+
+	do {
+		nx_status = _TcpSocket_Send_Check(this);
+		if (nx_status != NX_SUCCESS)
+			return nx_status;
+	    this->SendThread = &this->Thread;
+
+		nx_status = nx_packet_allocate(&NxPacketPool, &tx_packet, NX_TCP_PACKET, TX_WAIT_FOREVER);
+		if (nx_status != NX_SUCCESS)
+			break;
+
+		/* append the message to send into the packet */
+		nx_status = _TcpSocket_BuildAsiMessagePacket(tx_packet, message, message_length, &NxPacketPool, TX_WAIT_FOREVER);
+		if (nx_status != NX_SUCCESS)
+			break;
+		nx_status = _TcpSocket_Send(this, tx_packet);
+	}while(0);
+
+	if (tx_packet != NX_NULL)
+		nx_packet_release(tx_packet);
+	this->SendThread = NX_NULL;
+	return nx_status;
+}
+
 
 /* KeepAlive
  * NetXDuoのキープアライブ設定は動的には変更できない
@@ -333,6 +421,8 @@ UINT TcpServerThread_Create(TCP_TASK* this, UINT port, CHAR* name, UINT tx_start
 	this->RecieveCallback 	= TcpSocket_Send;
 	this->CleanUp			= TcpServerThread_Cleanup;
 	this->SendPacket			= TcpSocket_Send;
+	this->SendMessage		= TcpSocket_SendMessage;
+	this->SendWaitTicks		= PERIODIC_MSEC(1000);
 	this->Active 			= NX_FALSE;
 
 	return TcpThread_Create(this, name, tx_start, priority, TcpServerThread_Entry);
@@ -362,6 +452,7 @@ UINT TcpClientThread_Create(TCP_TASK* this, ULONG remote_ip_address, UINT remote
 	this->RecieveCallback 	= TcpSocket_Send;
 	this->CleanUp			= TcpClientThread_Cleanup;
 	this->SendPacket			= TcpSocket_Send;
+	this->SendMessage		= TcpSocket_SendMessage;
 	this->Active 			= NX_FALSE;
 
 	return TcpThread_Create(this, name, tx_start, priority, TcpClientThread_Entry);

@@ -30,6 +30,9 @@ extern "C" {
 #define DBGMSG_LEVEL				MSG_LEVEL_DEBUG	// コードを有効にするメッセージレベル
 #define ERRMSG_LEVEL				MSG_LEVEL_DEBUG	// エラーメッセージを表示するメッセージレベル
 
+void lm_vprintf(const char* fmt, va_list args);
+void lm_printf(const char* fmt, ...);
+
 
 #if LOGMSG_LEVEL > MSG_LEVEL_DEBUG
 	#define LOGMSG_DEBUG(fmt,...)
@@ -152,7 +155,7 @@ void LogMsg(int level, const char* fmt, ...);
 //#define _DBGMSG3(lv,msg,...)			DbgMsg(lv, __FILE__, __LINE__, __func__, msg, __VA_ARGS__)
 //#define _DBGMSG4(lv,msg,...)			DbgMsg(lv, __FILE__, __LINE__, __func__, msg, __VA_ARGS__)
 void DbgMsg(int level, const char* file, int line, const char* func, const char* fmt, ...);
-#define DBGMSG(status,lv,msg) 			DbgMsg(status, lv, __FILE__, __LINE__, __func__, msg)
+#define DBGMSG(status,lv,msg) 			DbgMsg(status, lv, __FILE_NAME__, __LINE__, __func__, msg)
 
 
 
@@ -165,7 +168,7 @@ void DbgMsg(int level, const char* file, int line, const char* func, const char*
 //#define _ASSERT4(status,lv,msg,...)	Assert(status, lv, __FILE__, __LINE__, __func__, msg, __VA_ARGS__)
 void AstMsg(int status, int level, const char* file, int line, const char* func, const char* fmt, ...);
 int Assert(int status, int level, const char* file, int line, const char* func, const char* fmt, ...);
-#define ASSERT(status,lv,msg) 			Assert(status, lv, __FILE__, __LINE__, __func__, msg)
+#define ASSERT(status,lv,msg) 			Assert(status, lv, __FILE_NAME__, __LINE__, __func__, msg)
 
 
 void Error_Handler(void);
