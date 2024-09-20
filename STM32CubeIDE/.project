@@ -3,6 +3,7 @@
 	<name>Nx_Iperf</name>
 	<comment></comment>
 	<projects>
+		<project>STM32H5xxDrivers</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

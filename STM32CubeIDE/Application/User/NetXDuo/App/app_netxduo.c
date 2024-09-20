@@ -419,7 +419,6 @@ static VOID nx_app_thread_entry (ULONG thread_input)
 			LogMsg(MSG_LEVEL_MESSAGE, "app_thread_entry count=%u", ++count);
 		}
 	}
-
 	/* if this thread is not needed any more, we relinquish it */
 	tx_thread_relinquish();
 }

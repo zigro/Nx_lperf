@@ -233,37 +233,44 @@ static VOID TcpServerThread_Entry(ULONG thread_input)
 
 		ULONG actual_status;
 		// Check status of an IP instance
-		if (NX_SUCCESS != nx_ip_status_check(&NetXDuoEthIpInstance, NX_IP_INITIALIZE_DONE, &actual_status, NX_IP_PERIODIC_RATE))
-			break;
+
+		if (NX_SUCCESS != NX_ASSERT_ERROR("", 0,
+				nx_ip_status_check(&NetXDuoEthIpInstance, NX_IP_INITIALIZE_DONE, &actual_status, NX_IP_PERIODIC_RATE)
+		))	break;
 		// 送信排他用セマフォを作成
 		if (NX_SUCCESS != tx_semaphore_create(&this->TxSemaphore, "TX Semaphore", 1))
 			break;
 		step	= 1;
 		// TCP Server Socket を作成する
-		if (NX_SUCCESS != TcpSocket_Create(this, "TCP Server Socket"))
+		if (NX_SUCCESS != NX_ASSERT_ERROR("", 0,TcpSocket_Create(this, "TCP Server Socket")))
 			break;
 		step	= 2;
 		// 指定TCPポートに対するリッスン要求を登録
-		if (NX_SUCCESS != nx_tcp_server_socket_listen(&NetXDuoEthIpInstance, this->Port, &this->Socket, this->QueueMax, NX_NULL))
-			break;
+		if (NX_SUCCESS != NX_ASSERT_ERROR("", 0,
+				nx_tcp_server_socket_listen(&NetXDuoEthIpInstance, this->Port, &this->Socket, this->QueueMax, NX_NULL)
+		))	break;
 		LOGMSG_DEBUG("TCP Server Thread [%s] start listen port:%u.", this->Thread.tx_thread_name, this->Port);
 		while (this->Active == NX_TRUE){
-			LOGMSG_DEBUG("TCP Server Thread [%s] wait accept port:%u.", this->Thread.tx_thread_name, this->Port);
+			LOGMSG_DEBUG("TCP Server Thread [%s] 接続待機 port:%u.", this->Thread.tx_thread_name, this->Port);
 			step	= 3;
 			// Client接続リクエストを受信
-			if (NX_SUCCESS == nx_tcp_server_socket_accept(&this->Socket, NX_WAIT_FOREVER)){
+			if (NX_SUCCESS == NX_ASSERT_ERROR("", 0,
+					nx_tcp_server_socket_accept(&this->Socket, NX_WAIT_FOREVER)
+			)){
 				// 接続したピアIPアドレスとポート番号を取得
 				ULONG RemotePort;
 				if (NX_SUCCESS != nxd_tcp_socket_peer_info_get(&this->Socket, &this->RemoteIP, &RemotePort))
 					break;
 				this->RemotePort = (UINT)RemotePort;
-				LOGMSG_DEBUG("TCP Server Thread [%s] connected.", this->Thread.tx_thread_name);
+				LOGMSG_DEBUG("TCP Server Thread [%s] 接続完了.", this->Thread.tx_thread_name);
 				PRINT_IP_ADDRESS_PORT(this->RemoteIP.nxd_ip_address.v4, this->RemotePort);
 				step	= 4;
 				// TCP受信処理
 				while (this->Active == NX_TRUE){
-					if (NX_SUCCESS != TcpSocket_Recieve(this))
+					if (NX_SUCCESS != TcpSocket_Recieve(this)){
+						LOGMSG_DEBUG("TCP Server Thread [%s] 接続が切断されました.", this->Thread.tx_thread_name);
 						break;
+					}
 				}
 				nx_tcp_socket_disconnect(&this->Socket, DISCONNECT_WAIT);
 			}
@@ -276,13 +283,13 @@ static VOID TcpServerThread_Entry(ULONG thread_input)
     this->Active = NX_FALSE;
     switch (step){
     	case 4:
-			nx_tcp_server_socket_unaccept(&this->Socket);
+    		NX_ASSERT_ERROR("",1,nx_tcp_server_socket_unaccept(&this->Socket));
 		case 3:
-		    nx_tcp_server_socket_unlisten(&NetXDuoEthIpInstance, this->Port);
+			NX_ASSERT_ERROR("",1,nx_tcp_server_socket_unlisten(&NetXDuoEthIpInstance, this->Port));
 		case 2:
-			nx_tcp_socket_delete(&this->Socket);
+			NX_ASSERT_ERROR("",1,nx_tcp_socket_delete(&this->Socket));
 		case 1:
-    		tx_semaphore_delete(&this->TxSemaphore);
+			TX_ASSERT_ERROR("",1,tx_semaphore_delete(&this->TxSemaphore));
 		case 0:
 			break;
     }
@@ -295,6 +302,7 @@ static VOID TcpServerThread_Entry(ULONG thread_input)
  */
 static void TcpServerThread_Cleanup(TCP_TASK* this)
 {
+	LOGMSG_DEBUG("TcpServerThread [%s] 終了処理", this->Thread.tx_thread_name);
     nx_tcp_socket_disconnect(&this->Socket, NX_NO_WAIT);
     nx_tcp_server_socket_unaccept(&this->Socket);
     nx_tcp_server_socket_unlisten(&NetXDuoEthIpInstance, this->Port);
@@ -316,22 +324,29 @@ static VOID TcpClientThread_Entry(ULONG thread_input){
 	TCP_TASK	*this = (TCP_TASK*)thread_input;
     UINT	step;
     do {
-    	step   = 0;	// TCP Socket Create
+		LOGMSG_DEBUG("TcpClientThread [%s] START.", this->Thread.tx_thread_name);
+		step   = 0;	// TCP Socket Create
 		if (NX_SUCCESS != TcpSocket_Create(this, "TCP Client Socket"))
 			break;
 		step   = 1;	// bind the client socket for the DEFAULT_PORT
 		if (NX_SUCCESS != nx_tcp_client_socket_bind(&this->Socket, this->Port, NX_WAIT_FOREVER))
 			break;
 		step   = 2;	// connect to the remote server on the specified port
-		if (NX_SUCCESS != nxd_tcp_client_socket_connect(&this->Socket, &this->RemoteIP, this->RemotePort, NX_WAIT_FOREVER))
+		LOGMSG_DEBUG("TcpClientThread [%s] Try Connect.", this->Thread.tx_thread_name);
+		if (NX_SUCCESS != NX_ASSERT_ERROR("",0,
+				nxd_tcp_client_socket_connect(&this->Socket, &this->RemoteIP, this->RemotePort, NX_WAIT_FOREVER))){
+			LOGMSG_DEBUG("TcpClientThread [%s] 接続失敗.", this->Thread.tx_thread_name);
 			break;
+		}
 		// 送信排他用セマフォを作成
 		if (NX_SUCCESS != tx_semaphore_create(&this->TxSemaphore, "TX Semaphore", 1))
 			break;
 		step   = 3; // 受信処理
 		for (this->Active = 1; this->Active == 1; ){
-			if (NX_SUCCESS != TcpSocket_Recieve(this))
+			if (NX_SUCCESS != TcpSocket_Recieve(this)){
+				LOGMSG_DEBUG("TcpClientThread [%s] 接続が切断されました.", this->Thread.tx_thread_name);
 				break;
+			}
 		}
 		nx_tcp_socket_disconnect(&this->Socket, DISCONNECT_WAIT);
     } while(0);
@@ -339,11 +354,11 @@ static VOID TcpClientThread_Entry(ULONG thread_input){
     this->Active = 0;
     switch (step){
     	case 3:
-    		tx_semaphore_delete(&this->TxSemaphore);
+    		TX_ASSERT_ERROR("",1,tx_semaphore_delete(&this->TxSemaphore));
 		case 2:
-			nx_tcp_client_socket_unbind(&this->Socket);
+			NX_ASSERT_ERROR("",1,nx_tcp_client_socket_unbind(&this->Socket));
 		case 1:
-			nx_tcp_socket_delete(&this->Socket);
+			NX_ASSERT_ERROR("",1,nx_tcp_socket_delete(&this->Socket));
 		case 0:
 			break;
     }
@@ -356,14 +371,15 @@ static VOID TcpClientThread_Entry(ULONG thread_input){
  */
 static void TcpClientThread_Cleanup(TCP_TASK* this)
 {
-    nx_tcp_socket_disconnect(&this->Socket, NX_NO_WAIT);
-	nx_tcp_client_socket_unbind(&this->Socket);
-    nx_tcp_socket_delete(&this->Socket);
+	LOGMSG_DEBUG("TcpClientThread [%s] 終了処理", this->Thread.tx_thread_name);
+	NX_ASSERT_ERROR("",1,nx_tcp_socket_disconnect(&this->Socket, NX_NO_WAIT));
+	NX_ASSERT_ERROR("",0,nx_tcp_client_socket_unbind(&this->Socket));
+	NX_ASSERT_ERROR("",0,nx_tcp_socket_delete(&this->Socket));
 
-    tx_thread_terminate(&this->Thread);
-    tx_thread_delete(&this->Thread);
+    TX_ASSERT_ERROR("",0,tx_thread_terminate(&this->Thread));
+    TX_ASSERT_ERROR("",0,tx_thread_delete(&this->Thread));
 
-    tx_byte_release(this->StackSpace);
+    TX_ASSERT_ERROR("",0,tx_byte_release(this->StackSpace));
     this->StackSpace = NX_NULL;
 }
 
@@ -378,12 +394,12 @@ static UINT TcpThread_Create(TCP_TASK* this, CHAR* name, UINT tx_start, UINT pri
 	UINT status;
 	// Allocate the memory for main thread
 	if (this->StackSpace == NX_NULL){
-		if (TX_SUCCESS != ASSERT_ERROR("TcpThread_Stack_allocate",
+		if (TX_SUCCESS != TX_ASSERT_ERROR("TcpThread_Stack_allocate",1,
 				status = tx_byte_allocate(TxBytePool, (VOID**)&this->StackSpace, this->StackSize, TX_NO_WAIT))){
 			return status;
 		}
 	}
-	if (TX_SUCCESS != ASSERT_ERROR("TcpThread_Create",
+	if (TX_SUCCESS != TX_ASSERT_ERROR("TcpThread_Create",1,
 			status = tx_thread_create(
 						&this->Thread,
 						name, //this->Name,

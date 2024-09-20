@@ -22,7 +22,8 @@
 //#include "nx_ip.h"
 //#include "nx_system.h"
 
-const char* const LevelMsg[] = {"DEBUG", "INFO", "MESSAGE", "RESERVED", "NOERROR", "WARNING", "ERROR", "FATAL" };
+//const char* const LevelMsg[] = {"DEBUG", "INFO", "MESSAGE", "RESERVED", "NOERROR", "WARNING", "ERROR", "FATAL" };
+const char* const LevelMsg[] = {"DBG", "INF", "MSG", "RSV", "NOE", "WRN", "ERR", "FER" };
 
 static TX_MUTEX    lock;
 int __io_putchar(int ch);
@@ -52,7 +53,7 @@ size_t _write(int file, unsigned char const *ptr, size_t len){
     tx_mutex_get(&lock, NX_WAIT_FOREVER); //lockして同時アクセスを防ぐ
 	(void)file;
 	int length = __write_message(ptr, len);
-	if (length < 0)
+//	if (length < 0)
 		length = __write(file, ptr, len);
     tx_mutex_put(&lock);
 	return length;
@@ -104,7 +105,7 @@ void LogMsg(int level, const char* fmt, ...)
 void DbgMsg(int level, const char* file, int line, const char* func, const char* fmt, ...){
 	if (level < LOGMSG_LEVEL)
 		return;
-	lm_printf("%s:%d [%s] %s()\n", file, line, LevelMsg[level], func);
+	lm_printf("[%s] %s:%d %s()", LevelMsg[level], file, line, func);
     va_list ap;
     va_start( ap, fmt );
     lm_vprintf( fmt, ap );
@@ -112,9 +113,11 @@ void DbgMsg(int level, const char* file, int line, const char* func, const char*
 }
 
 void AstMsg(int status, int level, const char* file, int line, const char* func, const char* fmt, ...){
+	if (status == 0)
+		level = MSG_LEVEL_INFOMATION;
 	if (level < ERRMSG_LEVEL)
 		return;
-    lm_printf("%s:%d [%s] %s(), status:%d\n", file, line, LevelMsg[level], func, status);
+    lm_printf("[%s] %s:%d %s(), status:%d", LevelMsg[level], file, line, func, status);
     va_list ap;
     va_start( ap, fmt );
     lm_vprintf( fmt, ap );
@@ -131,5 +134,25 @@ int Assert(int status, int level, const char* file, int line, const char* func, 
     if (level >= MSG_LEVEL_FATALERROR){
     	ERROR_HANDLER();
     }
+	return status;
+}
+
+int TxAssertStatus(UINT status, int level, const char* file, int line, const char* func, const char* msg, int brk){
+	if (status == TX_SUCCESS)
+		level = MSG_LEVEL_INFOMATION;
+	if (level < ERRMSG_LEVEL)
+		return status;
+    lm_printf("[%s] %s:%d %s() ==> %s(%d) %s", LevelMsg[level], file, line, func, Get_TxStatusName(status), status, msg);
+    if ((status != TX_SUCCESS) && (brk != 0)) DEBUG_BREAK(0);
+	return status;
+}
+
+int NxAssertStatus(UINT status, int level, const char* file, int line, const char* func, const char* msg, int brk){
+	if (status == NX_SUCCESS)
+		level = MSG_LEVEL_INFOMATION;
+	if (level < ERRMSG_LEVEL)
+		return status;
+    lm_printf("[%s] %s:%d %s() ==> %s(%d) %s", LevelMsg[level], file, line, func, Get_NxStatusName(status), status, msg);
+    if ((status != TX_SUCCESS) && (brk != 0)) DEBUG_BREAK(0);
 	return status;
 }

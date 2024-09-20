@@ -30,6 +30,21 @@ extern "C" {
 #define DBGMSG_LEVEL				MSG_LEVEL_DEBUG	// コードを有効にするメッセージレベル
 #define ERRMSG_LEVEL				MSG_LEVEL_DEBUG	// エラーメッセージを表示するメッセージレベル
 
+/**
+  \brief   Breakpoint
+  \details Causes the processor to enter Debug state.
+           Debug tools can use this to investigate system state when the instruction at a particular address is reached.
+  \param [in]    value  is ignored by the processor.
+                 If required, a debugger can use it to store additional information about the breakpoint.
+ */
+#ifdef DEBUG
+#define DEBUG_BREAK(value)                 __BKPT(value)
+#define ASSERT_BREAK(status)				if(status!=0)DEBUG_BREAK(0)
+#else
+#define DEBUG_BREAK(value)
+#define ASSERT_BREAK(status)
+#endif
+
 void lm_vprintf(const char* fmt, va_list args);
 void lm_printf(const char* fmt, ...);
 
@@ -131,10 +146,13 @@ void LogMsg(int level, const char* fmt, ...);
 
 #if DBGMSG_LEVEL > MSG_LEVEL_ERROR
 	#define DBGMSG_ERROR(...)
+#define ASSERT_ERROR(msg,status)
 #else
 	#define DBGMSG_ERROR(...)			DBGMSG(MSG_LEVEL_ERROR, ##__VA_ARGS__)
 //	#define ASSERT_ERROR(status,...)	ASSERT(status, MSG_LEVEL_WARNING, __VA_ARGS__)
-	#define ASSERT_ERROR(msg,status)	ASSERT(status, MSG_LEVEL_WARNING, msg)
+	#define ASSERT_ERROR(msg,status)	ASSERT(status, MSG_LEVEL_ERROR, msg)
+	#define TX_ASSERT_ERROR(msg,brk,status)		_TX_ASSERT_STATUS(status, MSG_LEVEL_ERROR, msg,brk)
+	#define NX_ASSERT_ERROR(msg,brk,status)		_NX_ASSERT_STATUS(status, MSG_LEVEL_ERROR, msg,brk)
 #endif
 
 #if DBGMSG_LEVEL > MSG_LEVEL_FATALERROR
@@ -146,6 +164,9 @@ void LogMsg(int level, const char* fmt, ...);
 //	#define ASSERT_FATALERROR(status,...)	ASSERT(status, MSG_LEVEL_WARNING, __VA_ARGS__)
 	#define ASSERT_FATALERROR(msg,status)	ASSERT(status, MSG_LEVEL_WARNING, msg)
 #endif
+
+const CHAR* const Get_NxStatusName(UINT nx_status);
+const CHAR* const Get_TxStatusName(UINT tx_status);
 
 //#define DBGMSG(...) 					_DBGMSG(__VA_ARGS__,_DBGMSG4,_DBGMSG3,_DBGMSG2,_DBGMSG1,_DBGMSG0)(__VA_ARGS__)
 //#define _DBGMSG(_1,_2,_3,_4,_5,_6,name,...) name
@@ -168,7 +189,12 @@ void DbgMsg(int level, const char* file, int line, const char* func, const char*
 //#define _ASSERT4(status,lv,msg,...)	Assert(status, lv, __FILE__, __LINE__, __func__, msg, __VA_ARGS__)
 void AstMsg(int status, int level, const char* file, int line, const char* func, const char* fmt, ...);
 int Assert(int status, int level, const char* file, int line, const char* func, const char* fmt, ...);
+int TxAssertStatus(UINT status, int level, const char* file, int line, const char* func, const char* msg, int brk);
+int NxAssertStatus(UINT status, int level, const char* file, int line, const char* func, const char* msg, int brk);
+
 #define ASSERT(status,lv,msg) 			Assert(status, lv, __FILE_NAME__, __LINE__, __func__, msg)
+#define _TX_ASSERT_STATUS(status,lv,msg,brk) 	TxAssertStatus(status, lv, __FILE_NAME__, __LINE__, __func__, msg,brk)
+#define _NX_ASSERT_STATUS(status,lv,msg,brk) 	NxAssertStatus(status, lv, __FILE_NAME__, __LINE__, __func__, msg,brk)
 
 
 void Error_Handler(void);
