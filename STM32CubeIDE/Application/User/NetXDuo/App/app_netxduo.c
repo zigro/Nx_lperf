@@ -454,6 +454,14 @@ static VOID App_Link_Thread_Entry(ULONG thread_input){
                 	    nx_dhcp_stop(&DHCPClient);
                     	nx_dhcp_start(&DHCPClient);
 					}
+					TcpManagement.CleanUp(&TcpManagement);
+					TcpManagement.CleanUp(&TcpManagement);
+					if (NX_SUCCESS != ASSERT_ERROR("TCP Manegement Interface Thread",
+							TcpServerThread_Create(&TcpManagement, TcpManagementPort, "Management TCP Thread", TX_DONT_START, DEFAULT_PRIORITY))){
+						return NX_NOT_SUCCESSFUL;
+					}
+
+
                 }
             }
         }
